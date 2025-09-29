@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import api from '../lib/api.js';
 import '../App.css';
@@ -67,7 +68,8 @@ const Transactions = () => {
           product_name: product.name,
           unit_price: parseFloat(product.price),
           quantity: 1,
-          stock_available: product.stock_quantity
+          stock_available: product.stock_quantity,
+          sku: product.sku
         }]);
       } else {
         alert('Produto sem estoque');
@@ -142,14 +144,12 @@ const Transactions = () => {
 
       await api.post('/transactions', transactionData);
       
-      // Reset form
       setCart([]);
       setPaymentMethod('dinheiro');
       setDiscountPercent(0);
       setReceivedAmount('');
       setShowNewSale(false);
       
-      // Refresh data
       await fetchTransactions();
       await fetchProducts();
       
@@ -163,7 +163,7 @@ const Transactions = () => {
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const formatCurrency = (value) => {
@@ -187,6 +187,13 @@ const Transactions = () => {
     }
   };
 
+  const paymentOptions = [
+    { value: 'dinheiro', label: 'Dinheiro', icon: <Banknote className="w-5 h-5 mr-2" /> },
+    { value: 'cartao_credito', label: 'Crédito', icon: <CreditCard className="w-5 h-5 mr-2" /> },
+    { value: 'cartao_debito', label: 'Débito', icon: <CreditCard className="w-5 h-5 mr-2" /> },
+    { value: 'pix', label: 'PIX', icon: <Smartphone className="w-5 h-5 mr-2" /> },
+  ];
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -203,13 +210,12 @@ const Transactions = () => {
         </Button>
       </div>
 
-      {/* Modal de Nova Venda */}
       {showNewSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
             <div className="flex h-full">
-              {/* Produtos */}
-              <div className="flex-1 p-6 border-r">
+              {/* Produtos e Pagamento */}
+              <div className="flex-1 p-6 border-r flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-bold">Selecionar Produtos</h2>
                   <Button variant="ghost" size="sm" onClick={() => setShowNewSale(false)}>
@@ -221,7 +227,7 @@ const Transactions = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
-                      placeholder="Buscar produtos..."
+                      placeholder="Buscar produtos por nome ou SKU..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
@@ -229,47 +235,75 @@ const Transactions = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto">
-                  {filteredProducts.map((product) => (
-                    <Card 
-                      key={product.id} 
-                      className="cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => addToCart(product)}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <h3 className="font-medium text-sm">{product.name}</h3>
-                            <p className="text-xs text-gray-600">SKU: {product.sku}</p>
-                          </div>
-                          <Badge variant={product.stock_quantity > 0 ? "secondary" : "destructive"} className="text-xs">
-                            {product.stock_quantity}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-green-600">
+                <div className="flex-grow overflow-y-auto mb-4 border rounded-lg">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-gray-50">
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="text-center">Estoque</TableHead>
+                        <TableHead className="text-right">Preço</TableHead>
+                        <TableHead className="text-center">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product.id} className="hover:bg-gray-50">
+                          <TableCell>
+                            <div className="font-medium">{product.name}</div>
+                            <div className="text-xs text-gray-500">SKU: {product.sku}</div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={product.stock_quantity > 0 ? "secondary" : "destructive"}>
+                              {product.stock_quantity}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-green-600">
                             {formatCurrency(product.price)}
-                          </span>
-                          <Button size="sm" variant="outline">
-                            <Plus className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button size="sm" variant="outline" onClick={() => addToCart(product)}>
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {/* NOVA ÁREA DE PAGAMENTO */}
+                <div className="mt-auto pt-4 border-t">
+                    <h3 className="text-lg font-semibold mb-3">Forma de Pagamento</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {paymentOptions.map((option) => (
+                            <Button
+                                key={option.value}
+                                variant={paymentMethod === option.value ? 'default' : 'outline'}
+                                onClick={() => setPaymentMethod(option.value)}
+                                className="justify-start h-12 text-base"
+                            >
+                                {option.icon}
+                                {option.label}
+                            </Button>
+                        ))}
+                    </div>
                 </div>
               </div>
 
-              {/* Carrinho e Pagamento */}
-              <div className="w-96 p-6 bg-gray-50">
+              {/* Carrinho e Resumo */}
+              <div className="w-96 p-6 bg-gray-50 flex flex-col">
                 <h2 className="text-xl font-bold mb-4 flex items-center">
                   <ShoppingCart className="w-5 h-5 mr-2" />
-                  Carrinho ({cart.length})
+                  Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})
                 </h2>
 
-                {/* Itens do Carrinho */}
-                <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
-                  {cart.map((item) => (
+                <div className="flex-grow space-y-3 mb-4 overflow-y-auto">
+                  {cart.length === 0 ? (
+                      <div className="text-center text-gray-500 pt-10">
+                          <ShoppingCart className="w-10 h-10 mx-auto mb-2" />
+                          <p>Seu carrinho está vazio.</p>
+                      </div>
+                  ) : cart.map((item) => (
                     <Card key={item.product_id}>
                       <CardContent className="p-3">
                         <div className="flex justify-between items-start mb-2">
@@ -280,29 +314,21 @@ const Transactions = () => {
                             </p>
                           </div>
                           <Button
-                            size="sm"
+                            size="icon"
                             variant="ghost"
                             onClick={() => removeFromCart(item.product_id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 h-7 w-7"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)}
-                            >
+                            <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)} className="h-7 w-7">
                               <Minus className="w-3 h-3" />
                             </Button>
-                            <span className="w-8 text-center text-sm">{item.quantity}</span>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)}
-                            >
+                            <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
+                            <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)} className="h-7 w-7">
                               <Plus className="w-3 h-3" />
                             </Button>
                           </div>
@@ -315,95 +341,48 @@ const Transactions = () => {
                   ))}
                 </div>
 
-                <Separator className="my-4" />
+                <div className="mt-auto">
+                  <Separator className="my-4" />
 
-                {/* Desconto */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Desconto (%)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={discountPercent}
-                    onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-
-                {/* Forma de Pagamento */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">Forma de Pagamento</label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                      <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                      <SelectItem value="pix">PIX</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Valor Recebido (apenas para dinheiro) */}
-                {paymentMethod === 'dinheiro' && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Valor Recebido</label>
+                    <label className="block text-sm font-medium mb-2">Desconto (%)</label>
                     <Input
-                      type="number"
-                      step="0.01"
-                      value={receivedAmount}
-                      onChange={(e) => setReceivedAmount(e.target.value)}
-                      placeholder="0,00"
+                      type="number" min="0" max="100"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
                     />
                   </div>
-                )}
 
-                {/* Resumo */}
-                <div className="space-y-2 mb-4 p-3 bg-white rounded border">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(calculateSubtotal())}</span>
-                  </div>
-                  {discountPercent > 0 && (
-                    <div className="flex justify-between text-sm text-red-600">
-                      <span>Desconto ({discountPercent}%):</span>
-                      <span>-{formatCurrency(calculateDiscount())}</span>
+                  {paymentMethod === 'dinheiro' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium mb-2">Valor Recebido</label>
+                      <Input
+                        type="number" step="0.01"
+                        value={receivedAmount}
+                        onChange={(e) => setReceivedAmount(e.target.value)}
+                        placeholder="0,00"
+                      />
                     </div>
                   )}
-                  <Separator />
-                  <div className="flex justify-between font-bold">
-                    <span>Total:</span>
-                    <span>{formatCurrency(calculateTotal())}</span>
-                  </div>
-                  {paymentMethod === 'dinheiro' && receivedAmount && (
-                    <div className="flex justify-between text-sm">
-                      <span>Troco:</span>
-                      <span className={calculateChange() >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {formatCurrency(calculateChange())}
-                      </span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Botões */}
-                <div className="space-y-2">
-                  <Button
-                    onClick={handleFinalizeSale}
-                    disabled={submitting || cart.length === 0}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
-                    <Calculator className="w-4 h-4 mr-2" />
-                    {submitting ? 'Finalizando...' : 'Finalizar Venda'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowNewSale(false)}
-                    className="w-full"
-                  >
-                    Cancelar
-                  </Button>
+                  <div className="space-y-2 mb-4 p-3 bg-white rounded border">
+                    <div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(calculateSubtotal())}</span></div>
+                    {discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto ({discountPercent}%):</span><span>-{formatCurrency(calculateDiscount())}</span></div>)}
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg"><span>Total:</span><span>{formatCurrency(calculateTotal())}</span></div>
+                    {paymentMethod === 'dinheiro' && receivedAmount && (<div className="flex justify-between text-sm"><span>Troco:</span><span className={calculateChange() >= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{formatCurrency(calculateChange())}</span></div>)}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0} className="w-full bg-green-600 hover:bg-green-700 h-12 text-base">
+                      <Calculator className="w-5 h-5 mr-2" />
+                      {submitting ? 'Finalizando...' : 'Finalizar Venda'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowNewSale(false)} className="w-full h-12 text-base">
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -411,7 +390,6 @@ const Transactions = () => {
         </div>
       )}
 
-      {/* Lista de Transações */}
       <Card>
         <CardHeader>
           <CardTitle>Histórico de Vendas</CardTitle>
@@ -452,10 +430,10 @@ const Transactions = () => {
                         <div className="font-bold text-lg text-green-600">
                           {formatCurrency(transaction.total_amount)}
                         </div>
-                        <div className="flex items-center text-sm text-gray-600">
+                        <div className="flex items-center justify-end text-sm text-gray-600">
                           {getPaymentMethodIcon(transaction.payment_method)}
                           <span className="ml-1 capitalize">
-                            {transaction.payment_method.replace('_', ' ')}
+                            {transaction.payment_method.replace(/_/g, ' ')}
                           </span>
                         </div>
                       </div>
@@ -488,4 +466,3 @@ const Transactions = () => {
 };
 
 export default Transactions;
-
