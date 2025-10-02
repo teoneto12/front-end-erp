@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,45 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, CreditCard, Banknote, Smartphone, Printer, ChevronDown, Ban } from 'lucide-react';
 import api from '../lib/api.js';
+import Dashboard from '../components/Dashboard'; // O novo dashboard integrado
 import Pagination from '../components/Pagination';
 import '../App.css';
 
-const SalesChart = ({ data }) => {
-  const paymentData = data.flatMap(t => t.payments || []);
-  const processedData = paymentData.reduce((acc, payment) => {
-    const method = payment.payment_method.replace(/_/g, ' ');
-    if (!acc[method]) {
-      acc[method] = { name: method.charAt(0).toUpperCase() + method.slice(1), Total: 0 };
-    }
-    acc[method].Total += parseFloat(payment.amount || 0);
-    return acc;
-  }, {});
-
-  const chartData = Object.values(processedData);
-
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>Vendas por Forma de Pagamento</CardTitle>
-        <CardDescription>Total vendido nas transações exibidas</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis tickFormatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
-            <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
-            <Legend />
-            <Bar dataKey="Total" fill="#16a34a" name="Total Vendido" />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
-};
-
 const Transactions = () => {
+  // Estados
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState(null);
   const [currentProductPage, setCurrentProductPage] = useState(1);
@@ -57,8 +23,7 @@ const Transactions = () => {
   const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
   const [transactionSearchTerm, setTransactionSearchTerm] = useState('');
   const [expandedTransactionId, setExpandedTransactionId] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showNewSale, setShowNewSale] = useState(false);
   const [cart, setCart] = useState([]);
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -66,18 +31,14 @@ const Transactions = () => {
   const [payments, setPayments] = useState([]);
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState('dinheiro');
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
+  const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
 
+  // Efeito para buscar transações na montagem e ao mudar filtros
   useEffect(() => {
-    if (transactionSearchTerm) {
-      setHasSearched(true);
-      fetchTransactions(currentTransactionPage, transactionSearchTerm);
-    } else {
-      setTransactions([]);
-      setTransactionPagination(null);
-      setHasSearched(false);
-    }
-  }, [currentTransactionPage, transactionSearchTerm]);
+    fetchTransactions(currentTransactionPage, transactionSearchTerm, dateFilter);
+  }, [currentTransactionPage, transactionSearchTerm, dateFilter]);
 
+  // Efeito para buscar produtos quando o modal de nova venda é aberto
   useEffect(() => {
     if (showNewSale) {
       fetchProducts(currentProductPage, productSearchTerm);
@@ -92,17 +53,30 @@ const Transactions = () => {
     } catch (error) { console.error('Erro ao carregar produtos:', error); }
   };
 
-  const fetchTransactions = async (page = 1, search = '') => {
+  const fetchTransactions = async (page = 1, search = '', dates = {}) => {
     setLoading(true);
     try {
-      const response = await api.get('/transactions', { params: { page, limit: 5, search } });
+      const params = {
+        page,
+        limit: 5,
+        search,
+        start_date: dates.start || undefined,
+        end_date: dates.end || undefined,
+      };
+      const response = await api.get('/transactions', { params });
       setTransactions(response.data.transactions || []);
       setTransactionPagination(response.data.pagination || null);
-    } catch (error) { 
+    } catch (error) {
       console.error('Erro ao carregar transações:', error);
       setTransactions([]);
-    } 
+    }
     finally { setLoading(false); }
+  };
+
+  const handleDateChange = (e) => {
+    const { name, value } = e.target;
+    setDateFilter(prev => ({ ...prev, [name]: value }));
+    setCurrentTransactionPage(1);
   };
 
   const formatCurrency = (value) => {
@@ -213,6 +187,8 @@ const Transactions = () => {
     setCurrentPaymentMethod('dinheiro');
     setShowNewSale(false);
     setTransactionSearchTerm('');
+    setDateFilter({ start: '', end: '' });
+    fetchTransactions(1, '', {});
   };
 
   const handleFinalizeSale = async () => {
@@ -257,11 +233,11 @@ const Transactions = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Transações</h1>
-          <p className="text-gray-600">Registre vendas e visualize o histórico</p>
+          <h1 className="text-3xl font-bold text-gray-900">Vendas e Desempenho</h1>
+          <p className="text-gray-600">Analise métricas, registre vendas e visualize o histórico.</p>
         </div>
         <Button onClick={() => setShowNewSale(true)} className="bg-green-600 hover:bg-green-700">
           <Plus className="w-4 h-4 mr-2" />
@@ -356,7 +332,7 @@ const Transactions = () => {
                       <Calculator className="w-5 h-5 mr-2" />
                       {submitting ? 'Finalizando...' : 'Finalizar Venda'}
                     </Button>
-                    <Button variant="outline" onClick={() => setShowNewSale(false)} className="w-full h-12 text-base">Cancelar</Button>
+                    <Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button>
                   </div>
                 </div>
               </div>
@@ -365,29 +341,42 @@ const Transactions = () => {
         </div>
       )}
 
-      {!loading && transactions.length > 0 && <SalesChart data={transactions} />}
+      {/* Dashboard integrado aqui. Ele só renderiza se houver dados. */}
+      <Dashboard transactions={transactions} />
 
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <div><CardTitle>Histórico de Vendas</CardTitle><CardDescription>Clique em uma venda para ver os detalhes</CardDescription></div>
-            <div className="relative w-64"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar por Nº, operador, item..." value={transactionSearchTerm} onChange={(e) => { setTransactionSearchTerm(e.target.value); setCurrentTransactionPage(1); }} className="pl-10" /></div>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <CardTitle>Histórico de Vendas</CardTitle>
+              <CardDescription>Visualize ou filtre as vendas realizadas</CardDescription>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-2">
+                <Input type="date" name="start" value={dateFilter.start} onChange={handleDateChange} className="w-full sm:w-auto" />
+                <span className="text-gray-500">até</span>
+                <Input type="date" name="end" value={dateFilter.end} onChange={handleDateChange} className="w-full sm:w-auto" />
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Buscar por Nº, operador, item..."
+                  value={transactionSearchTerm}
+                  onChange={(e) => { setTransactionSearchTerm(e.target.value); setCurrentTransactionPage(1); }}
+                  className="pl-10"
+                />
+              </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div><p className="mt-2 text-gray-600">Carregando transações...</p></div>
-          ) : !hasSearched ? (
-            <div className="text-center py-8">
-              <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Busque por uma transação</h3>
-              <p className="text-gray-600">Utilize o campo de busca acima para encontrar vendas.</p>
-            </div>
           ) : transactions.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma venda encontrada</h3>
-              <p className="text-gray-600">Tente um termo de busca diferente.</p>
+              <p className="text-gray-600">Tente um termo de busca ou período diferente.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -412,7 +401,7 @@ const Transactions = () => {
                           <div className="text-right mr-4">
                             <div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div>
                             <div className="flex items-center justify-end text-sm text-gray-600 space-x-2">
-                              {(transaction.payments || []).map(p => getPaymentMethodIcon(p.payment_method))}
+                              {(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method)}</div>)}
                             </div>
                           </div>
                           <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} />
