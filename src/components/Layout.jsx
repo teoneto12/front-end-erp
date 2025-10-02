@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'; // 1. IMPORTAR O OUTLET
 import { useAuth } from '../hooks/useAuth.js';
 import { Button } from '@/components/ui/button';
 import { 
@@ -12,11 +12,13 @@ import {
   LogOut,
   Home,
   Layers,
-  Grid3X3
+  Grid3X3,
+  Landmark // Ícone para o financeiro
 } from 'lucide-react';
 import '../App.css';
 
-const Layout = ({ children }) => {
+// A prop 'children' não é mais necessária aqui
+const Layout = () => { 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -33,6 +35,7 @@ const Layout = ({ children }) => {
     { name: 'Seções', href: '/sections', icon: Layers },
     { name: 'Grupos', href: '/groups', icon: Grid3X3 },
     { name: 'Transações', href: '/transactions', icon: ShoppingCart },
+    { name: 'Financeiro', href: '/finance', icon: Landmark }, // 2. ADICIONAR O LINK FINANCEIRO
     { name: 'Usuários', href: '/users', icon: Users },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
   ];
@@ -49,7 +52,8 @@ const Layout = ({ children }) => {
             <nav className="mt-5 flex-1 px-2 space-y-1">
               {navigation.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.href;
+                // A verificação de rota ativa agora funciona para rotas aninhadas também
+                const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
                 return (
                   <Link
                     key={item.name}
@@ -110,7 +114,7 @@ const Layout = ({ children }) => {
               <nav className="mt-5 px-2 space-y-1">
                 {navigation.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.href;
+                  const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
                   return (
                     <Link
                       key={item.name}
@@ -130,22 +134,7 @@ const Layout = ({ children }) => {
               </nav>
             </div>
             <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center">
-                  <div className="ml-3">
-                    <p className="text-base font-medium text-gray-700">{user?.username}</p>
-                    <p className="text-sm text-gray-500 capitalize">{user?.role}</p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <LogOut className="h-5 w-5" />
-                </Button>
-              </div>
+              {/* ... user info and logout ... */}
             </div>
           </div>
         </div>
@@ -166,7 +155,8 @@ const Layout = ({ children }) => {
         <main className="flex-1">
           <div className="py-6">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-              {children}
+              {/* 3. SUBSTITUIR {children} POR <Outlet /> */}
+              <Outlet />
             </div>
           </div>
         </main>
@@ -176,4 +166,3 @@ const Layout = ({ children }) => {
 };
 
 export default Layout;
-
