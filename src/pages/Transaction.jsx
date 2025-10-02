@@ -11,7 +11,7 @@ import api from '../lib/api.js';
 import Pagination from '../components/Pagination';
 import '../App.css';
 
-// Componente para o Gráfico de Vendas (sem alterações)
+// Componente do Gráfico (sem alterações)
 const SalesChart = ({ data }) => {
   const paymentMethodLabels = {
     dinheiro: 'Dinheiro',
@@ -19,18 +19,15 @@ const SalesChart = ({ data }) => {
     cartao_debito: 'Débito',
     pix: 'PIX',
   };
-
   const processedData = (data || []).reduce((acc, transaction) => {
     const method = transaction.payment_method;
     if (!acc[method]) {
       acc[method] = { name: paymentMethodLabels[method] || method, Total: 0 };
     }
-    acc[method].Total += transaction.total_amount;
+    acc[method].Total += parseFloat(transaction.total_amount || 0);
     return acc;
   }, {});
-
   const chartData = Object.values(processedData);
-
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -52,7 +49,6 @@ const SalesChart = ({ data }) => {
     </Card>
   );
 };
-
 
 const Transactions = () => {
   const [products, setProducts] = useState([]);
@@ -100,62 +96,57 @@ const Transactions = () => {
       setTransactionPagination(response.data.pagination || null);
     } catch (error) { 
       console.error('Erro ao carregar transações:', error);
-      setTransactions([]); // Garante que seja um array em caso de erro
+      setTransactions([]);
     } 
     finally { setLoading(false); }
   };
 
-  // CORREÇÃO APLICADA AQUI
- const handlePrintReceipt = (transaction) => {
-  // Usamos (transaction.items || []) para garantir que seja um array
-  const itemsHtml = (transaction.items || []).map(item => `
-    <div style="display: flex; justify-content: space-between;">
-      <span>${item.quantity}x ${item.product_name}</span>
-      <span>${formatCurrency(parseFloat(item.subtotal))}</span>
-    </div>
-  `).join('');
-
-  // CORREÇÃO PRINCIPAL: Usamos parseFloat() para garantir que a soma seja numérica
-  const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
-
-  // O cálculo do desconto agora também usa o subtotal numérico correto
-  const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
-
-  const receiptContent = `
-    <div style="font-family: monospace; width: 300px; margin: auto; padding: 20px; border: 1px solid #ccc;">
-      <h2 style="text-align: center;">Recibo de Venda</h2>
-      <p><strong>ID da Venda:</strong> #${transaction.id.slice(-8)}</p>
-      <p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p>
-      <p><strong>Operador:</strong> ${transaction.cashier_name}</p>
-      <hr>
-      <h3 style="margin-bottom: 5px;">Itens:</h3>
-      ${itemsHtml}
-      <hr>
+  const handlePrintReceipt = (transaction) => {
+    const itemsHtml = (transaction.items || []).map(item => `
       <div style="display: flex; justify-content: space-between;">
-        <span>Subtotal:</span>
-        <span>${formatCurrency(subtotal)}</span>
+        <span>${item.quantity}x ${item.product_name}</span>
+        <span>${formatCurrency(parseFloat(item.subtotal))}</span>
       </div>
-      ${transaction.discount_percent > 0 ? `
-      <div style="display: flex; justify-content: space-between;">
-        <span>Desconto (${transaction.discount_percent}%):</span>
-        <span>-${formatCurrency(discountAmount)}</span>
+    `).join('');
+
+    const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
+    const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
+
+    const receiptContent = `
+      <div style="font-family: monospace; width: 300px; margin: auto; padding: 20px; border: 1px solid #ccc;">
+        <h2 style="text-align: center;">Recibo de Venda</h2>
+        <p><strong>Venda Nº:</strong> ${transaction.sale_number}</p>
+        <p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p>
+        <p><strong>Operador:</strong> ${transaction.cashier_name}</p>
+        <hr>
+        <h3 style="margin-bottom: 5px;">Itens:</h3>
+        ${itemsHtml}
+        <hr>
+        <div style="display: flex; justify-content: space-between;">
+          <span>Subtotal:</span>
+          <span>${formatCurrency(subtotal)}</span>
+        </div>
+        ${transaction.discount_percent > 0 ? `
+        <div style="display: flex; justify-content: space-between;">
+          <span>Desconto (${transaction.discount_percent}%):</span>
+          <span>-${formatCurrency(discountAmount)}</span>
+        </div>
+        ` : ''}
+        <hr>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
+          <span>TOTAL:</span>
+          <span>${formatCurrency(parseFloat(transaction.total_amount))}</span>
+        </div>
+        <hr>
+        <p><strong>Pagamento:</strong> ${transaction.payment_method.replace(/_/g, ' ')}</p>
+        <p style="text-align: center; margin-top: 20px;">Obrigado pela sua compra!</p>
       </div>
-      ` : ''}
-      <hr>
-      <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.1em;">
-        <span>TOTAL:</span>
-        <span>${formatCurrency(parseFloat(transaction.total_amount))}</span>
-      </div>
-      <hr>
-      <p><strong>Pagamento:</strong> ${transaction.payment_method.replace(/_/g, ' ')}</p>
-      <p style="text-align: center; margin-top: 20px;">Obrigado pela sua compra!</p>
-    </div>
-  `;
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(receiptContent);
-  printWindow.document.close();
-  printWindow.print();
-};
+    `;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(receiptContent);
+    printWindow.document.close();
+    printWindow.print();
+  };
 
   const toggleTransactionDetails = (id) => {
     setExpandedTransactionId(expandedTransactionId === id ? null : id);
@@ -194,8 +185,7 @@ const Transactions = () => {
       const transactionData = {
         items: cart.map(item => ({ product_id: item.product_id, quantity: item.quantity, unit_price: item.unit_price })),
         payment_method: paymentMethod,
-        discount_percent: discountPercent,
-        total_amount: calculateTotal()
+        discount_percent: discountPercent
       };
       await api.post('/transactions', transactionData);
       
@@ -247,6 +237,7 @@ const Transactions = () => {
         </Button>
       </div>
 
+      {/* CORREÇÃO: Modal de Nova Venda incluído por completo */}
       {showNewSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-[95vw] h-[90vh] overflow-hidden">
@@ -346,7 +337,7 @@ const Transactions = () => {
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
-                placeholder="Buscar por ID, operador, item..."
+                placeholder="Buscar por Nº, operador, item..."
                 value={transactionSearchTerm}
                 onChange={(e) => {
                   setTransactionSearchTerm(e.target.value);
@@ -369,7 +360,10 @@ const Transactions = () => {
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="flex items-center space-x-2 mb-1"><Badge variant="outline">#{transaction.id.slice(-8)}</Badge><Badge variant="secondary">{transaction.status}</Badge></div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <Badge variant="outline">Venda #{transaction.sale_number}</Badge>
+                          <Badge variant="secondary">{transaction.status}</Badge>
+                        </div>
                         <p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p>
                       </div>
                       <div className="flex items-center">
