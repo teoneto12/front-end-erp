@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, CreditCard, Banknote, Smartphone, Printer, ChevronDown, Ban } from 'lucide-react';
+import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, CreditCard, Banknote, Smartphone, Printer, ChevronDown, Ban, FileDown } from 'lucide-react';
 import api from '../lib/api.js';
-import Dashboard from '../components/Dashboard'; // O novo dashboard integrado
+import { exportToPDF } from '../lib/pdfGenerator.js';
+import Dashboard from '../components/Dashboard'; 
 import Pagination from '../components/Pagination';
 import '../App.css';
 
@@ -352,6 +353,14 @@ const Transactions = () => {
               <CardDescription>Visualize ou filtre as vendas realizadas</CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+              <Button 
+                variant="outline" 
+                onClick={() => exportToPDF(transactions, dateFilter)}
+                disabled={transactions.length === 0} // Desabilita se não houver dados
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                Exportar PDF
+              </Button>
               <div className="flex items-center gap-2">
                 <Input type="date" name="start" value={dateFilter.start} onChange={handleDateChange} className="w-full sm:w-auto" />
                 <span className="text-gray-500">até</span>
@@ -365,6 +374,7 @@ const Transactions = () => {
                   onChange={(e) => { setTransactionSearchTerm(e.target.value); setCurrentTransactionPage(1); }}
                   className="pl-10"
                 />
+                
               </div>
             </div>
           </div>
