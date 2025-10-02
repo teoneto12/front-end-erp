@@ -16,6 +16,9 @@ import {
   Landmark // Ícone para o financeiro
 } from 'lucide-react';
 import '../App.css';
+import { href } from 'react-router-dom';
+import { icons } from 'lucide-react';
+import { User } from 'lucide-react';
 
 // A prop 'children' não é mais necessária aqui
 const Layout = () => { 
@@ -38,6 +41,7 @@ const Layout = () => {
     { name: 'Financeiro', href: '/finance', icon: Landmark }, // 2. ADICIONAR O LINK FINANCEIRO
     { name: 'Usuários', href: '/users', icon: Users },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
+    { name: 'Clientes', href: '/customers', icons: Users},
   ];
 
   return (

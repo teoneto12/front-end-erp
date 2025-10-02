@@ -20,6 +20,7 @@ import Users from './pages/Users.jsx';
 import InvoiceImport from './pages/InvoiceImports.jsx';
 import Finance from './pages/Finance.jsx';
 import './App.css';
+import Customers from './pages/Customers.jsx';
 
 // Este componente agora define a estrutura de rotas correta
 function AppRoutes() {
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="invoices/import" element={<InvoiceImport />}/>
         <Route path="finance" element={<Finance />}/>
         <Route path="sections" element={<Sections />} />
+        <Route path="customers" element={<Customers/>}/>
         <Route path="groups" element={<Groups />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="users" element={<Users />} />
