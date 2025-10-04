@@ -1,4 +1,4 @@
-// src/App.js (ou onde suas rotas estão)
+// Em /src/App.js (ou onde suas rotas estão)
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -19,22 +19,23 @@ import Transactions from './pages/Transaction.jsx';
 import Users from './pages/Users.jsx';
 import InvoiceImport from './pages/InvoiceImports.jsx';
 import Finance from './pages/Finance.jsx';
-import './App.css';
 import Customers from './pages/Customers.jsx';
+import PaymentMethods from './pages/PaymentMethods.jsx'; // Importa a nova tela
+import './App.css';
 
-// Este componente agora define a estrutura de rotas correta
+// Este componente define a estrutura de rotas
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
 
   return (
     <Routes>
-      {/* 1. Rota de Login (fora do layout principal) */}
+      {/* Rota de Login (fora do layout principal) */}
       <Route 
         path="/login" 
         element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} 
       />
 
-      {/* 2. Rota Pai que renderiza o Layout e protege as rotas filhas */}
+      {/* Rota Pai que renderiza o Layout e protege as rotas filhas */}
       <Route
         path="/"
         element={
@@ -43,8 +44,8 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* 3. Rotas Filhas: Elas serão renderizadas DENTRO do <Outlet /> do Layout */}
-        <Route index element={<Dashboard />} /> {/* 'index' é a rota padrão para o path="/" */}
+        {/* Rotas Filhas: Elas serão renderizadas DENTRO do <Outlet /> do Layout */}
+        <Route index element={<Dashboard />} />
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/edit/:id" element={<ProductForm />} />
@@ -55,16 +56,20 @@ function AppRoutes() {
         <Route path="groups" element={<Groups />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="users" element={<Users />} />
+        
+        {/* ROTA CORRIGIDA: O path corresponde ao link no menu */}
+        <Route path="payment-methods" element={<PaymentMethods/>}/> 
+        
         <Route path="reports" element={<div>Relatórios - Em desenvolvimento</div>} />
         
-        {/* Rota "catch-all" para páginas não encontradas DENTRO do layout */}
+        {/* Rota "catch-all" para páginas não encontradas */}
         <Route path="*" element={<div>Página não encontrada</div>} />
       </Route>
     </Routes>
   );
 }
 
-// O componente App principal permanece o mesmo
+// O componente App principal que envolve tudo
 function App() {
   return (
     <AuthProvider>
