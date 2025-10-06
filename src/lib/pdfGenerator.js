@@ -1,65 +1,114 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable'; // MUDANÇA 1: Importe a função padrão
+import autoTable from 'jspdf-autotable';
 
-// Função para formatar moeda, para usar no PDF
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-export const exportToPDF = (transactions, dateFilter) => {
-  // 1. Inicializa o documento PDF
-  const doc = new jsPDF();
+// ATUALIZAÇÃO: A função agora aceita um array de transações e um filtro de data opcional.
+export const exportToPDF = (transactions, dateFilter = null) => {
+  if (!transactions || transactions.length === 0) {
+    alert("Não há dados para gerar o PDF.");
+    return;
+  }
 
-  // 2. Define o Título e o Período do Relatório
-  const reportTitle = "Relatório de Vendas";
-  const dateRange = dateFilter.start && dateFilter.end 
-    ? `Período: ${new Date(dateFilter.start).toLocaleDateString('pt-BR')} a ${new Date(dateFilter.end).toLocaleDateString('pt-BR')}`
-    : "Período: Todas as vendas";
-  
+  const doc = new jsPDF();
+  const isSingleTransaction = transactions.length === 1;
+
+  // --- Título do Documento ---
+  const reportTitle = isSingleTransaction ? `Comprovante de Venda #${transactions[0].sale_number}` : "Relatório de Vendas";
   doc.setFontSize(18);
   doc.text(reportTitle, 14, 22);
-  doc.setFontSize(11);
-  doc.text(dateRange, 14, 30);
 
-  // 3. Adiciona os KPIs (Resumo)
+  // --- Período ou Data da Venda ---
+  let dateText;
+  if (isSingleTransaction) {
+    dateText = `Data: ${new Date(transactions[0].transaction_date).toLocaleString('pt-BR')}`;
+  } else if (dateFilter && dateFilter.start && dateFilter.end) {
+    dateText = `Período: ${new Date(dateFilter.start).toLocaleDateString('pt-BR')} a ${new Date(dateFilter.end).toLocaleDateString('pt-BR')}`;
+  } else {
+    dateText = "Período: Todas as vendas";
+  }
+  doc.setFontSize(11);
+  doc.text(dateText, 14, 30);
+
+  // --- Resumo (KPIs) ---
   const activeTransactions = transactions.filter(t => t.status !== 'CANCELADO');
   const totalRevenue = activeTransactions.reduce((acc, t) => acc + parseFloat(t.total_amount), 0);
-  const totalSales = activeTransactions.length;
-  const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+  
+  if (!isSingleTransaction) {
+    const totalSales = activeTransactions.length;
+    const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+    const summaryText = `
+      Faturamento Total: ${formatCurrency(totalRevenue)}
+      Total de Vendas: ${totalSales}
+      Ticket Médio: ${formatCurrency(averageTicket)}
+    `;
+    doc.text(summaryText, 14, 40);
+  }
 
-  const summaryText = `
-    Faturamento Total: ${formatCurrency(totalRevenue)}
-    Total de Vendas: ${totalSales}
-    Ticket Médio: ${formatCurrency(averageTicket)}
-  `;
-  doc.setFontSize(11);
-  doc.text(summaryText, 14, 40);
-
-  // 4. Define as Colunas e as Linhas da Tabela
-  const tableColumn = ["Nº Venda", "Data", "Operador", "Itens", "Status", "Total"];
+  // --- Tabela de Itens/Vendas ---
+  const tableColumn = isSingleTransaction 
+    ? ["Qtd", "Produto", "Preço Unit.", "Subtotal"]
+    : ["Nº Venda", "Data", "Operador", "Itens", "Status", "Total"];
+  
   const tableRows = [];
+  if (isSingleTransaction) {
+    const tran = transactions[0];
+    (tran.items || []).forEach(item => {
+      tableRows.push([
+        item.quantity,
+        item.product_name,
+        formatCurrency(item.unit_price),
+        formatCurrency(item.subtotal)
+      ]);
+    });
+  } else {
+    transactions.forEach(t => {
+      tableRows.push([
+        t.sale_number,
+        new Date(t.transaction_date).toLocaleString('pt-BR'),
+        t.cashier_name,
+        (t.items || []).length,
+        t.status,
+        formatCurrency(t.total_amount)
+      ]);
+    });
+  }
 
-  transactions.forEach(t => {
-    const transactionData = [
-      t.sale_number,
-      new Date(t.transaction_date).toLocaleString('pt-BR'),
-      t.cashier_name,
-      (t.items || []).length, // Garante que items exista
-      t.status,
-      formatCurrency(t.total_amount)
-    ];
-    tableRows.push(transactionData);
-  });
-
-  // 5. Adiciona a Tabela ao PDF usando o autoTable
-  // MUDANÇA 2: Chame autoTable como uma função, passando o 'doc'
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: 60, // Posição inicial da tabela (abaixo do resumo)
+    startY: isSingleTransaction ? 40 : 60,
     theme: 'striped',
-    headStyles: { fillColor: [22, 163, 74] }, // Cor verde para o cabeçalho
+    headStyles: { fillColor: [22, 163, 74] },
   });
 
-  // 6. Adiciona um rodapé com a data de geração
+  // --- Seção de Totais e Pagamentos (apenas para venda única) ---
+  if (isSingleTransaction) {
+    const finalY = doc.lastAutoTable.finalY + 10;
+    const tran = transactions[0];
+    const subtotal = (tran.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal), 0);
+    const discountAmount = tran.discount_percent > 0 ? (subtotal * (tran.discount_percent / 100)) : 0;
+
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${formatCurrency(subtotal)}`, 14, finalY);
+    if (discountAmount > 0) {
+      doc.text(`Desconto: -${formatCurrency(discountAmount)}`, 14, finalY + 5);
+    }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total: ${formatCurrency(tran.total_amount)}`, 14, finalY + 12);
+    doc.setFont("helvetica", "normal");
+
+    doc.setFontSize(10);
+    doc.text("Pagamentos:", 14, finalY + 20);
+    let paymentY = finalY + 25;
+    (tran.payments || []).forEach(p => {
+      doc.text(`${p.payment_method_name}: ${formatCurrency(p.amount)}`, 14, paymentY);
+      paymentY += 5;
+    });
+  }
+
+  // --- Rodapé ---
   const pageCount = doc.internal.getNumberOfPages();
   for(let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -68,6 +117,9 @@ export const exportToPDF = (transactions, dateFilter) => {
     doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, doc.internal.pageSize.height - 10);
   }
 
-  // 7. Salva o arquivo
-  doc.save(`relatorio_vendas_${new Date().toISOString().slice(0,10)}.pdf`);
+  // --- Salvar Arquivo ---
+  const fileName = isSingleTransaction 
+    ? `venda_${transactions[0].sale_number}.pdf`
+    : `relatorio_vendas_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(fileName);
 };

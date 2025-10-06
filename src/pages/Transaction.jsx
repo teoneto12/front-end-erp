@@ -3,20 +3,46 @@ import api from '../lib/api.js';
 
 // --- COMPONENTES DE UI ---
 import { Button } from '@/components/ui/button';
-// ==================================================================
-// CORREÇÃO: Importando os componentes de Card que estavam faltando.
-// ==================================================================
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, ChevronDown, Ban, FileDown, Banknote, CreditCard, Smartphone } from 'lucide-react';
-import { exportToPDF } from '../lib/pdfGenerator.js';
-import Dashboard from '../components/Dashboard'; 
+import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, ChevronDown, Ban, FileDown, Banknote, CreditCard, Smartphone, FileText } from 'lucide-react';
 import Pagination from '../components/Pagination';
+import Modal from '../components/Modal';
 import '../App.css';
+
+// Importações que estavam causando problemas, agora reativadas
+import Dashboard from '../components/Dashboard'; 
+import { exportToPDF } from '../lib/pdfGenerator.js';
+
+// ==================================================================
+// COMPONENTE PARA O MODAL DE OPÇÕES DE RECIBO
+// ==================================================================
+const ReceiptOptionsModal = ({ transaction, onPrint, onPDF, onClose }) => {
+  return (
+    <div className="space-y-4">
+      <p className="text-center text-lg">Venda #{transaction.sale_number} finalizada com sucesso!</p>
+      <p className="text-center text-gray-600">Como você deseja gerar o comprovante?</p>
+      <div className="flex justify-center gap-4 pt-4">
+        <Button onClick={onPrint} className="bg-blue-600 hover:bg-blue-700">
+          <Printer className="w-4 h-4 mr-2" />
+          Imprimir Cupom
+        </Button>
+        <Button onClick={onPDF} variant="outline">
+          <FileText className="w-4 h-4 mr-2" />
+          Gerar PDF
+        </Button>
+      </div>
+      <div className="text-center pt-2">
+        <Button variant="ghost" onClick={onClose}>Fechar</Button>
+      </div>
+    </div>
+  );
+};
+
 
 const Transactions = () => {
   // --- ESTADOS GERAIS ---
@@ -28,7 +54,7 @@ const Transactions = () => {
   const [expandedTransactionId, setExpandedTransactionId] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // --- ESTADOS DO MODAL DE NOVA VENDA (PDV) ---
+  // --- ESTADOS DO PDV ---
   const [showNewSale, setShowNewSale] = useState(false);
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState(null);
@@ -41,6 +67,11 @@ const Transactions = () => {
   const [currentPaymentMethodId, setCurrentPaymentMethodId] = useState('');
   const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // --- ESTADOS DO MODAL DE OPÇÕES ---
+  const [showReceiptOptions, setShowReceiptOptions] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState(null);
+
 
   // --- FUNÇÕES DE BUSCA (API) ---
   const fetchTransactions = useCallback(async (page = 1, search = '', dates = {}) => {
@@ -78,7 +109,7 @@ const Transactions = () => {
   // --- EFEITOS ---
   useEffect(() => {
     fetchTransactions(currentTransactionPage, transactionSearchTerm, dateFilter);
-  }, [currentTransactionPage, transactionSearchTerm, dateFilter, fetchTransactions]);
+  }, [currentTransactionPage, transactionSearchTerm, dateFilter.start, dateFilter.end, fetchTransactions]);
 
   useEffect(() => {
     if (showNewSale) {
@@ -91,6 +122,20 @@ const Transactions = () => {
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
   const formatDate = (dateString) => new Date(dateString).toLocaleString('pt-BR');
   const toggleTransactionDetails = (id) => setExpandedTransactionId(prevId => (prevId === id ? null : id));
+
+  const handlePrintReceipt = (transaction) => {
+    const itemsHtml = (transaction.items || []).map(item => `<div style="display: flex; justify-content: space-between;"><span>${item.quantity}x ${item.product_name}</span><span>${formatCurrency(item.subtotal)}</span></div>`).join('');
+    const paymentsHtml = (transaction.payments || []).map(p => `<div style="display: flex; justify-content: space-between;"><span>${p.payment_method_name}:</span><span>${formatCurrency(p.amount)}</span></div>`).join('');
+    const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
+    const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
+    const receiptContent = `<div style="font-family: monospace; width: 300px; margin: auto; padding: 15px; font-size: 12px;"><h2 style="text-align: center;">Recibo</h2><p><strong>Venda:</strong> ${transaction.sale_number}</p><p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p><p><strong>Operador:</strong> ${transaction.cashier_name}</p><hr><h3 style="margin-bottom: 5px;">Itens:</h3>${itemsHtml}<hr><div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${formatCurrency(subtotal)}</span></div>${discountAmount > 0 ? `<div style="display: flex; justify-content: space-between; color: red;"><span>Desconto:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}<hr><div style="display: flex; justify-content: space-between; font-weight: bold;"><span>TOTAL:</span><span>${formatCurrency(transaction.total_amount)}</span></div><hr><h3 style="margin-bottom: 5px;">Pagamentos:</h3>${paymentsHtml}<hr><p style="text-align: center; margin-top: 10px;">Obrigado!</p></div>`;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(receiptContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.product_id === product.id);
@@ -153,9 +198,18 @@ const Transactions = () => {
         payments: payments.map(p => ({ payment_method_id: p.payment_method_id, amount: p.amount })),
         discount_percent: discountPercent,
       };
-      await api.post('/transactions', transactionData);
-      alert('Venda realizada com sucesso!');
+      
+      const response = await api.post('/transactions', transactionData);
+      
+      if (response.data && response.data.transaction) {
+        setLastTransaction(response.data.transaction);
+        setShowReceiptOptions(true);
+      } else {
+        alert("Venda realizada com sucesso!");
+      }
+      
       resetSaleState();
+
     } catch (error) {
       alert('Erro ao finalizar venda: ' + (error.response?.data?.error || error.message));
     } finally {
@@ -164,27 +218,13 @@ const Transactions = () => {
   };
 
   const handleCancelTransaction = async (transactionId) => {
-    if (!window.confirm("Tem certeza que deseja cancelar esta venda?")) return;
+    if (!window.confirm("Tem certeza que deseja cancelar esta venda? O estoque NÃO será revertido.")) return;
     try {
       await api.delete(`/transactions/${transactionId}/cancel`);
       alert('Venda cancelada com sucesso!');
       fetchTransactions(currentTransactionPage);
     } catch (error) {
       alert('Erro ao cancelar venda: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const handlePrintReceipt = (transaction) => {
-    const itemsHtml = (transaction.items || []).map(item => `<div style="display: flex; justify-content: space-between;"><span>${item.quantity}x ${item.product_name}</span><span>${formatCurrency(item.subtotal)}</span></div>`).join('');
-    const paymentsHtml = (transaction.payments || []).map(p => `<div style="display: flex; justify-content: space-between;"><span>${p.payment_method_name}:</span><span>${formatCurrency(p.amount)}</span></div>`).join('');
-    const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
-    const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
-    const receiptContent = `<div style="font-family: monospace; width: 300px; margin: auto; padding: 15px; font-size: 12px;"><h2 style="text-align: center;">Recibo</h2><p><strong>Venda:</strong> ${transaction.sale_number}</p><p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p><hr><h3 style="margin-bottom: 5px;">Itens:</h3>${itemsHtml}<hr><div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${formatCurrency(subtotal)}</span></div>${discountAmount > 0 ? `<div style="display: flex; justify-content: space-between; color: red;"><span>Desconto:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}<hr><div style="display: flex; justify-content: space-between; font-weight: bold;"><span>TOTAL:</span><span>${formatCurrency(transaction.total_amount)}</span></div><hr><h3 style="margin-bottom: 5px;">Pagamentos:</h3>${paymentsHtml}<hr><p style="text-align: center; margin-top: 10px;">Obrigado!</p></div>`;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(receiptContent);
-      printWindow.document.close();
-      printWindow.print();
     }
   };
 
@@ -221,7 +261,7 @@ const Transactions = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName='vendas'/>
+                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName="produtos" />
               </div>
               <div className="w-[450px] p-6 bg-gray-50 flex flex-col">
                 <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
@@ -230,7 +270,7 @@ const Transactions = () => {
                   <Separator className="my-4" /><div className="mb-4"><label className="block text-sm font-medium mb-2">Desconto (%)</label><Input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} /></div>
                   <div className="space-y-2 mb-4 p-3 bg-white rounded border"><div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(calculateSubtotal())}</span></div>{discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto:</span><span>-{formatCurrency(calculateDiscount())}</span></div>)}<Separator /><div className="flex justify-between font-bold text-lg"><span>Total a Pagar:</span><span>{formatCurrency(calculateTotal())}</span></div><div className="flex justify-between text-sm text-blue-600"><span>Total Pago:</span><span>{formatCurrency(totalPaid)}</span></div><div className="flex justify-between text-sm font-bold text-orange-600"><span>Restante:</span><span>{formatCurrency(remainingToPay)}</span></div></div>
                   <div className="mb-4"><label className="block text-sm font-medium mb-2">Adicionar Pagamento</label><div className="flex items-center space-x-2"><Select value={currentPaymentMethodId} onValueChange={setCurrentPaymentMethodId}><SelectTrigger><SelectValue placeholder="Método" /></SelectTrigger><SelectContent>{paymentMethods.map(method => (<SelectItem key={method.id} value={method.id.toString()}>{method.name}</SelectItem>))}</SelectContent></Select><Input type="number" placeholder="Valor" value={currentPaymentAmount} onChange={(e) => setCurrentPaymentAmount(e.target.value)} /><Button onClick={handleAddPayment}><Plus className="w-4 h-4" /></Button></div></div>
-                  <div className="space-y-2 mb-4 max-h-24 overflow-y-auto">{payments.map((p, index) => (<div key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded-md text-sm"><div className="flex items-center"><span className="ml-2 capitalize">{p.name}</span></div><div className="flex items-center"><span className="font-semibold">{formatCurrency(p.amount)}</span><Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => handleRemovePayment(index)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div>))}</div>
+                  <div className="space-y-2 mb-4 max-h-24 overflow-y-auto">{payments.map((p, index) => (<div key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded-md text-sm"><div className="flex items-center">{getPaymentMethodIcon(p.name)}<span className="ml-2 capitalize">{p.name}</span></div><div className="flex items-center"><span className="font-semibold">{formatCurrency(p.amount)}</span><Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => handleRemovePayment(index)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div>))}</div>
                   <div className="space-y-2"><Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || Math.abs(remainingToPay) > 0.01} className="w-full bg-green-600 h-12 text-base"><Calculator className="w-5 h-5 mr-2" />{submitting ? 'Finalizando...' : 'Finalizar Venda'}</Button><Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button></div>
                 </div>
               </div>
@@ -239,20 +279,45 @@ const Transactions = () => {
         </div>
       )}
 
+      {showReceiptOptions && lastTransaction && (
+        <Modal open={showReceiptOptions} onClose={() => setShowReceiptOptions(false)} title="Gerar Comprovante">
+          <ReceiptOptionsModal
+            transaction={lastTransaction}
+            onPrint={() => {
+              handlePrintReceipt(lastTransaction);
+              setShowReceiptOptions(false);
+            }}
+            onPDF={() => {
+              exportToPDF([lastTransaction], dateFilter); // Passa o dateFilter também
+              setShowReceiptOptions(false);
+            }}
+            onClose={() => setShowReceiptOptions(false)}
+          />
+        </Modal>
+      )}
+
       <Dashboard transactions={transactions} />
+
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div><CardTitle>Histórico de Vendas</CardTitle><CardDescription>Visualize ou filtre as vendas realizadas</CardDescription></div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-              <Button variant="outline" onClick={() => exportToPDF(transactions, dateFilter)} disabled={transactions.length === 0}><FileDown className="w-4 h-4 mr-2" />Exportar PDF</Button>
+              <Button 
+                variant="outline" 
+                onClick={() => exportToPDF(transactions, dateFilter)}
+                disabled={transactions.length === 0}
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                Exportar PDF
+              </Button>
               <div className="flex items-center gap-2"><Input type="date" name="start" value={dateFilter.start} onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))} /><span className="text-gray-500">até</span><Input type="date" name="end" value={dateFilter.end} onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))} /></div>
               <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar..." value={transactionSearchTerm} onChange={(e) => { setTransactionSearchTerm(e.target.value); setCurrentTransactionPage(1); }} className="pl-10" /></div>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (<div className="text-center py-8">Carregando...</div>) : transactions.length === 0 ? (<div className="text-center py-8">Nenhuma venda encontrada.</div>) : (
+          {loading ? (<div className="text-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div><p className="mt-2 text-gray-600">Carregando transações...</p></div>) : transactions.length === 0 ? (<div className="text-center py-8"><ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" /><h3 className="text-lg font-medium">Nenhuma venda encontrada</h3><p className="text-gray-600">Tente um termo de busca ou período diferente.</p></div>) : (
             <div className="space-y-2">
               {transactions.map((transaction) => {
                 const isCancelled = transaction.status === 'CANCELADO';
@@ -277,7 +342,7 @@ const Transactions = () => {
               })}
             </div>
           )}
-          {transactions.length > 0 && (<Pagination pagination={transactionPagination} onPageChange={setCurrentTransactionPage} itemName='vendas' />)}
+          {transactions.length > 0 && (<Pagination pagination={transactionPagination} onPageChange={setCurrentTransactionPage} itemName="vendas" />)}
         </CardContent>
       </Card>
     </div>
