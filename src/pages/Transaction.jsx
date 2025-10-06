@@ -3,19 +3,22 @@ import api from '../lib/api.js';
 
 // --- COMPONENTES DE UI ---
 import { Button } from '@/components/ui/button';
-// ==================================================================
-// CORREÇÃO: Importando os componentes de Card que estavam faltando.
-// ==================================================================
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, ChevronDown, Ban, FileDown, Banknote, CreditCard, Smartphone } from 'lucide-react';
-import { exportToPDF } from '../lib/pdfGenerator.js';
+import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, ChevronDown, Ban, FileDown, Banknote, CreditCard, Smartphone, Loader2 } from 'lucide-react';
+
+// --- COMPONENTES CUSTOMIZADOS ---
 import Dashboard from '../components/Dashboard'; 
 import Pagination from '../components/Pagination';
+
+// --- UTILITÁRIOS ---
+import { exportToPDF } from '../lib/pdfGenerator.js';
+// A importação do receiptGenerator não é mais necessária, pois a impressão é feita pela ponte C#.
+
 import '../App.css';
 
 const Transactions = () => {
@@ -143,6 +146,7 @@ const Transactions = () => {
     fetchTransactions(1);
   };
 
+  // ▼▼▼ FUNÇÃO ATUALIZADA PARA USAR A PONTE DE IMPRESSÃO EM C# ▼▼▼
   const handleFinalizeSale = async () => {
     if (cart.length === 0) return alert('Adicione produtos ao carrinho');
     if (Math.abs(remainingToPay) > 0.01) return alert("O valor pago não corresponde ao total da venda.");
@@ -153,8 +157,26 @@ const Transactions = () => {
         payments: payments.map(p => ({ payment_method_id: p.payment_method_id, amount: p.amount })),
         discount_percent: discountPercent,
       };
-      await api.post('/transactions', transactionData);
-      alert('Venda realizada com sucesso!');
+      
+      const response = await api.post('/transactions', transactionData);
+      const finalizedTransaction = response.data.transaction;
+
+      if (window.confirm('Venda realizada com sucesso! Deseja imprimir o recibo?')) {
+        try {
+          // Chama a aplicação ponte em C# na porta 9000
+          await fetch('http://localhost:9000/print', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ transaction: finalizedTransaction } ),
+          });
+        } catch (printError) {
+          console.error('Erro ao conectar com a ponte de impressão:', printError);
+          alert('Não foi possível conectar ao serviço de impressão. Verifique se o programa da impressora (ponte) está rodando.');
+        }
+      }
+
       resetSaleState();
     } catch (error) {
       alert('Erro ao finalizar venda: ' + (error.response?.data?.error || error.message));
@@ -174,17 +196,17 @@ const Transactions = () => {
     }
   };
 
-  const handlePrintReceipt = (transaction) => {
-    const itemsHtml = (transaction.items || []).map(item => `<div style="display: flex; justify-content: space-between;"><span>${item.quantity}x ${item.product_name}</span><span>${formatCurrency(item.subtotal)}</span></div>`).join('');
-    const paymentsHtml = (transaction.payments || []).map(p => `<div style="display: flex; justify-content: space-between;"><span>${p.payment_method_name}:</span><span>${formatCurrency(p.amount)}</span></div>`).join('');
-    const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
-    const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
-    const receiptContent = `<div style="font-family: monospace; width: 300px; margin: auto; padding: 15px; font-size: 12px;"><h2 style="text-align: center;">Recibo</h2><p><strong>Venda:</strong> ${transaction.sale_number}</p><p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p><hr><h3 style="margin-bottom: 5px;">Itens:</h3>${itemsHtml}<hr><div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${formatCurrency(subtotal)}</span></div>${discountAmount > 0 ? `<div style="display: flex; justify-content: space-between; color: red;"><span>Desconto:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}<hr><div style="display: flex; justify-content: space-between; font-weight: bold;"><span>TOTAL:</span><span>${formatCurrency(transaction.total_amount)}</span></div><hr><h3 style="margin-bottom: 5px;">Pagamentos:</h3>${paymentsHtml}<hr><p style="text-align: center; margin-top: 10px;">Obrigado!</p></div>`;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(receiptContent);
-      printWindow.document.close();
-      printWindow.print();
+  // Função para imprimir recibo do histórico (também usa a ponte C#)
+  const handlePrintFromHistory = async (transaction) => {
+    try {
+      await fetch('http://localhost:9000/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction } ),
+      });
+    } catch (printError) {
+      console.error('Erro ao conectar com a ponte de impressão:', printError);
+      alert('Não foi possível conectar ao serviço de impressão.');
     }
   };
 
@@ -221,7 +243,7 @@ const Transactions = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName='vendas'/>
+                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName='produtos'/>
               </div>
               <div className="w-[450px] p-6 bg-gray-50 flex flex-col">
                 <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
@@ -231,7 +253,7 @@ const Transactions = () => {
                   <div className="space-y-2 mb-4 p-3 bg-white rounded border"><div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(calculateSubtotal())}</span></div>{discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto:</span><span>-{formatCurrency(calculateDiscount())}</span></div>)}<Separator /><div className="flex justify-between font-bold text-lg"><span>Total a Pagar:</span><span>{formatCurrency(calculateTotal())}</span></div><div className="flex justify-between text-sm text-blue-600"><span>Total Pago:</span><span>{formatCurrency(totalPaid)}</span></div><div className="flex justify-between text-sm font-bold text-orange-600"><span>Restante:</span><span>{formatCurrency(remainingToPay)}</span></div></div>
                   <div className="mb-4"><label className="block text-sm font-medium mb-2">Adicionar Pagamento</label><div className="flex items-center space-x-2"><Select value={currentPaymentMethodId} onValueChange={setCurrentPaymentMethodId}><SelectTrigger><SelectValue placeholder="Método" /></SelectTrigger><SelectContent>{paymentMethods.map(method => (<SelectItem key={method.id} value={method.id.toString()}>{method.name}</SelectItem>))}</SelectContent></Select><Input type="number" placeholder="Valor" value={currentPaymentAmount} onChange={(e) => setCurrentPaymentAmount(e.target.value)} /><Button onClick={handleAddPayment}><Plus className="w-4 h-4" /></Button></div></div>
                   <div className="space-y-2 mb-4 max-h-24 overflow-y-auto">{payments.map((p, index) => (<div key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded-md text-sm"><div className="flex items-center"><span className="ml-2 capitalize">{p.name}</span></div><div className="flex items-center"><span className="font-semibold">{formatCurrency(p.amount)}</span><Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => handleRemovePayment(index)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div>))}</div>
-                  <div className="space-y-2"><Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || Math.abs(remainingToPay) > 0.01} className="w-full bg-green-600 h-12 text-base"><Calculator className="w-5 h-5 mr-2" />{submitting ? 'Finalizando...' : 'Finalizar Venda'}</Button><Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button></div>
+                  <div className="space-y-2"><Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || Math.abs(remainingToPay) > 0.01} className="w-full bg-green-600 h-12 text-base">{submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Calculator className="w-5 h-5 mr-2" />}{submitting ? 'Finalizando...' : 'Finalizar Venda'}</Button><Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button></div>
                 </div>
               </div>
             </div>
@@ -252,7 +274,7 @@ const Transactions = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (<div className="text-center py-8">Carregando...</div>) : transactions.length === 0 ? (<div className="text-center py-8">Nenhuma venda encontrada.</div>) : (
+          {loading ? (<div className="text-center py-8"><Loader2 className="w-8 h-8 mx-auto animate-spin text-gray-400" /></div>) : transactions.length === 0 ? (<div className="text-center py-8">Nenhuma venda encontrada.</div>) : (
             <div className="space-y-2">
               {transactions.map((transaction) => {
                 const isCancelled = transaction.status === 'CANCELADO';
@@ -265,7 +287,7 @@ const Transactions = () => {
                       </div>
                       {expandedTransactionId === transaction.id && (
                         <div className="border-t mt-4 pt-4">
-                          <div className="flex justify-between items-center mb-3"><p className="text-sm font-medium">Itens da Venda:</p><div className="flex items-center space-x-2"><Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>{!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}</div></div>
+                          <div className="flex justify-between items-center mb-3"><p className="text-sm font-medium">Itens da Venda:</p><div className="flex items-center space-x-2"><Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintFromHistory(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>{!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}</div></div>
                           <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
                           <p className="text-sm font-medium mb-2">Pagamentos:</p>
                           <div className="space-y-1 text-sm text-gray-700">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
