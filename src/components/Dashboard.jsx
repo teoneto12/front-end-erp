@@ -1,3 +1,5 @@
+// frontend/src/components/Dashboard.jsx
+
 import React from 'react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,19 +8,10 @@ import { DollarSign, ShoppingBag, TrendingUp, Package } from 'lucide-react';
 // Função para formatar moeda
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-// ==================================================================
-// CORREÇÃO DEFINITIVA:
-// Adicionada uma verificação para só renderizar o ícone se ele for fornecido.
-// ==================================================================
 const KpiCard = ({ title, value, icon: Icon, description }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      {/* 
-        Esta verificação (Icon && ...) garante que o componente <Icon />
-        só será renderizado se a variável 'Icon' não for nula ou undefined.
-        Isso resolve o erro de forma definitiva.
-      */}
       {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
     </CardHeader>
     <CardContent>
@@ -75,7 +68,15 @@ const Dashboard = ({ transactions }) => {
   const paymentMethodData = activeTransactions
     .flatMap(t => t.payments || [])
     .reduce((acc, payment) => {
-      const method = payment.payment_method_name?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Não Identificado';
+      let method = payment.payment_method_name || 'Não Identificado';
+      
+      // ▼▼▼ CORREÇÃO APLICADA AQUI ▼▼▼
+      // Removemos a capitalização complexa e usamos uma mais simples e eficaz.
+      // Isso garante que "Crediário" seja formatado corretamente como "Crediário".
+      if (method !== 'Não Identificado') {
+        method = method.charAt(0).toUpperCase() + method.slice(1);
+      }
+
       if (!acc[method]) acc[method] = 0;
       acc[method] += parseFloat(payment.amount || 0);
       return acc;
@@ -83,7 +84,7 @@ const Dashboard = ({ transactions }) => {
   
   const paymentMethodChartData = Object.keys(paymentMethodData).map(name => ({
     name,
-    Total: paymentMethodData[name],
+    'Total Vendido': paymentMethodData[name], // Corrigido para corresponder ao dataKey da Bar
   }));
 
   return (
@@ -148,7 +149,7 @@ const Dashboard = ({ transactions }) => {
               <YAxis tickFormatter={(value) => formatCurrency(value)} />
               <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
-              <Bar dataKey="Total" fill="#16a34a" name="Total Vendido" />
+              <Bar dataKey="Total Vendido" fill="#16a34a" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>

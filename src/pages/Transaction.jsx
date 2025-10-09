@@ -27,7 +27,6 @@ const Transactions = () => {
   // --- ESTADOS ---
   const [transactions, setTransactions] = useState([]);
   const [transactionPagination, setTransactionPagination] = useState(null);
-  const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
   const [transactionSearchTerm, setTransactionSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
   const [expandedTransactionId, setExpandedTransactionId] = useState(null);
@@ -35,7 +34,6 @@ const Transactions = () => {
   const [showNewSale, setShowNewSale] = useState(false);
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState(null);
-  const [currentProductPage, setCurrentProductPage] = useState(1);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -94,16 +92,16 @@ const Transactions = () => {
 
   // --- EFEITOS ---
   useEffect(() => {
-    fetchTransactions(currentTransactionPage, transactionSearchTerm, dateFilter);
-  }, [currentTransactionPage, transactionSearchTerm, dateFilter, fetchTransactions]);
+    fetchTransactions(1, transactionSearchTerm, dateFilter);
+  }, [transactionSearchTerm, dateFilter, fetchTransactions]);
 
   useEffect(() => {
     if (showNewSale) {
-      fetchProducts(currentProductPage, productSearchTerm);
+      fetchProducts(1, productSearchTerm);
       fetchPaymentMethods();
       fetchCustomers();
     }
-  }, [showNewSale, currentProductPage, productSearchTerm, fetchProducts, fetchPaymentMethods, fetchCustomers]);
+  }, [showNewSale, productSearchTerm, fetchProducts, fetchPaymentMethods, fetchCustomers]);
 
   // --- FUNÇÕES DE LÓGICA E FORMATAÇÃO ---
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
@@ -229,14 +227,13 @@ const Transactions = () => {
     }
   };
 
-  // ▼▼▼ CORREÇÃO: Funções do modal de sucesso agora estão definidas ▼▼▼
   const handlePrintConfirm = async () => {
     if (!lastTransaction) return;
     try {
       await fetch('http://localhost:9000/print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transaction: lastTransaction } ),
+        body: JSON.stringify({ transaction: lastTransaction }  ),
       });
     } catch (printError) {
       console.error('Erro ao conectar com a ponte de impressão:', printError);
@@ -259,7 +256,7 @@ const Transactions = () => {
     try {
       await api.delete(`/transactions/${transactionId}/cancel`);
       alert('Venda cancelada com sucesso!');
-      fetchTransactions(currentTransactionPage);
+      fetchTransactions(transactionPagination?.page || 1);
     } catch (error) {
       alert('Erro ao cancelar venda: ' + (error.response?.data?.error || error.message));
     }
@@ -270,7 +267,7 @@ const Transactions = () => {
       await fetch('http://localhost:9000/print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transaction } ),
+        body: JSON.stringify({ transaction }  ),
       });
     } catch (printError) {
       console.error('Erro ao conectar com a ponte de impressão:', printError);
@@ -300,7 +297,7 @@ const Transactions = () => {
             <div className="flex h-full">
               <div className="flex-1 p-6 border-r flex flex-col">
                 <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold">Selecionar Produtos</h2><Button variant="ghost" size="sm" onClick={() => setShowNewSale(false)}><X className="w-4 h-4" /></Button></div>
-                <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar produtos..." value={productSearchTerm} onChange={(e) => { setProductSearchTerm(e.target.value); setCurrentProductPage(1); }} className="pl-10" /></div></div>
+                <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar produtos..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="pl-10" /></div></div>
                 <div className="flex-grow overflow-y-auto mb-4 border rounded-lg">
                   <Table><TableHeader className="sticky top-0 bg-gray-50"><TableRow><TableHead>Produto</TableHead><TableHead className="text-center">Estoque</TableHead><TableHead className="text-right">Preço</TableHead><TableHead className="text-center">Ação</TableHead></TableRow></TableHeader>
                     <TableBody>
@@ -310,7 +307,7 @@ const Transactions = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName='produtos' />
+                <Pagination pagination={productPagination} onPageChange={(newPage) => fetchProducts(newPage, productSearchTerm)} itemName='produtos' />
               </div>
               <div className="w-[450px] p-6 bg-gray-50 flex flex-col">
                 <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
@@ -350,7 +347,7 @@ const Transactions = () => {
           <DialogHeader>
             <DialogTitle>Parcelamento - Crédito Loja</DialogTitle>
             <DialogDescription>
-              Informe o número de parcelas para o valor de {formatCurrency(currentPaymentForInstallments && currentPaymentForInstallments.amount)}.
+              Informe o número de parcelas para o valor de {formatCurrency(currentPaymentForInstallments?.amount)}.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -382,42 +379,53 @@ const Transactions = () => {
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div><CardTitle>Histórico de Vendas</CardTitle><CardDescription>Visualize ou filtre as vendas realizadas</CardDescription></div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
               <Button variant="outline" onClick={() => exportToPDF(transactions, dateFilter)} disabled={transactions.length === 0}><FileDown className="w-4 h-4 mr-2" />Exportar PDF</Button>
               <div className="flex items-center gap-2"><Input type="date" name="start" value={dateFilter.start} onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))} /><span className="text-gray-500">até</span><Input type="date" name="end" value={dateFilter.end} onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))} /></div>
-              <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar..." value={transactionSearchTerm} onChange={(e) => { setTransactionSearchTerm(e.target.value); setCurrentTransactionPage(1); }} className="pl-10" /></div>
+              <div className="relative w-full sm:w-64"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar..." value={transactionSearchTerm} onChange={(e) => setTransactionSearchTerm(e.target.value)} className="pl-10" /></div>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (<div className="text-center py-8"><Loader2 className="w-8 h-8 mx-auto animate-spin text-gray-400" /></div>) : transactions.length === 0 ? (<div className="text-center py-8">Nenhuma venda encontrada.</div>) : (
-            <div className="space-y-2">
-              {transactions.map((transaction) => {
-                const isCancelled = transaction.status === 'CANCELADO';
-                return (
-                  <Card key={transaction.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => toggleTransactionDetails(transaction.id)}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div><div className="flex items-center space-x-2 mb-1"><Badge variant="outline">Venda #{transaction.sale_number}</Badge><Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge></div><p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p></div>
-                        <div className="flex items-center"><div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}</div></div><ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} /></div>
-                      </div>
-                      {expandedTransactionId === transaction.id && (
-                        <div className="border-t mt-4 pt-4">
-                          <div className="flex justify-between items-center mb-3"><p className="text-sm font-medium">Detalhes da Venda:</p><div className="flex items-center space-x-2"><Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintFromHistory(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>{!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}</div></div>
-                          {transaction.customer_name && <p className="text-sm text-gray-700 mb-2"><b>Cliente:</b> {transaction.customer_name}</p>}
-                          <p className="text-sm font-medium">Itens da Venda:</p>
-                          <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
-                          <p className="text-sm font-medium mb-2">Pagamentos:</p>
-                          <div className="space-y-1 text-sm text-gray-700">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
+          {loading ? (
+            <div className="text-center py-8"><Loader2 className="w-8 h-8 mx-auto animate-spin text-gray-400" /></div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-8">Nenhuma venda encontrada.</div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {transactions.map((transaction) => {
+                  const isCancelled = transaction.status === 'CANCELADO';
+                  return (
+                    <Card key={transaction.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => toggleTransactionDetails(transaction.id)}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div><div className="flex items-center space-x-2 mb-1"><Badge variant="outline">Venda #{transaction.sale_number}</Badge><Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge></div><p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p></div>
+                          <div className="flex items-center"><div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}</div></div><ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} /></div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                        {expandedTransactionId === transaction.id && (
+                          <div className="border-t mt-4 pt-4">
+                            <div className="flex justify-between items-center mb-3"><p className="text-sm font-medium">Detalhes da Venda:</p><div className="flex items-center space-x-2"><Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintFromHistory(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>{!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}</div></div>
+                            {transaction.customer_name && <p className="text-sm text-gray-700 mb-2"><b>Cliente:</b> {transaction.customer_name}</p>}
+                            <p className="text-sm font-medium">Itens da Venda:</p>
+                            <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
+                            <p className="text-sm font-medium mb-2">Pagamentos:</p>
+                            <div className="space-y-1 text-sm text-gray-700">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+              
+              {/* ▼▼▼ CORREÇÃO APLICADA AQUI ▼▼▼ */}
+              {/* A paginação foi movida para DENTRO do CardContent e renderizada condicionalmente */}
+              {transactionPagination && transactionPagination.pages > 1 && (
+                <Pagination pagination={transactionPagination} onPageChange={(newPage) => fetchTransactions(newPage, transactionSearchTerm, dateFilter)} itemName='vendas' />
+              )}
+            </>
           )}
-          {transactions.length > 0 && (<Pagination pagination={transactionPagination} onPageChange={setCurrentTransactionPage} itemName='vendas' />)}
         </CardContent>
       </Card>
     </div>

@@ -1,19 +1,27 @@
-import { useState, useEffect } from 'react';
+// frontend/src/pages/Customers.jsx
+
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Importando Select
+import { Badge } from '@/components/ui/badge'; // Importando Badge
 import { Plus, Search, Edit, Trash2, Users, Loader2 } from 'lucide-react';
-import Modal from '../components/Modal'; // Usando nosso modal customizado
+import Modal from '../components/Modal';
 import api from '../lib/api.js';
 
-// Formulário para o modal de Cliente
+// ==================================================================
+// Formulário para o modal (agora com campo de TIPO)
+// ==================================================================
 const CustomerForm = ({ customer, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    document: '', // CPF/CNPJ
+    document: '',
+    // ▼▼▼ NOVO CAMPO ADICIONADO ▼▼▼
+    type: 'cliente', // 'cliente', 'fornecedor', ou 'ambos'
   });
 
   useEffect(() => {
@@ -23,15 +31,23 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
         email: customer.email || '',
         phone: customer.phone || '',
         document: customer.document || '',
+        // ▼▼▼ CARREGA O TIPO DO CADASTRO EXISTENTE ▼▼▼
+        type: customer.type || 'cliente',
       });
     } else {
-      setFormData({ name: '', email: '', phone: '', document: '' });
+      // Reseta para um novo cadastro
+      setFormData({ name: '', email: '', phone: '', document: '', type: 'cliente' });
     }
   }, [customer]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handler para o componente Select
+  const handleTypeChange = (value) => {
+    setFormData(prev => ({ ...prev, type: value }));
   };
 
   const handleSubmit = (e) => {
@@ -42,9 +58,25 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Nome Completo / Razão Social *</label>
         <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
       </div>
+
+      {/* ▼▼▼ NOVO SELETOR DE TIPO ADICIONADO ▼▼▼ */}
+      <div>
+        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cadastro *</label>
+        <Select value={formData.type} onValueChange={handleTypeChange}>
+          <SelectTrigger id="type">
+            <SelectValue placeholder="Selecione o tipo..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cliente">Cliente</SelectItem>
+            <SelectItem value="fornecedor">Fornecedor</SelectItem>
+            <SelectItem value="ambos">Cliente e Fornecedor</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -61,13 +93,15 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
       </div>
       <div className="pt-4 flex justify-end gap-2 border-t mt-6">
         <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button type="submit">Salvar Cliente</Button>
+        <Button type="submit">Salvar Cadastro</Button>
       </div>
     </form>
   );
 };
 
-// Página Principal de Clientes
+// ==================================================================
+// Página Principal (agora Cadastros)
+// ==================================================================
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,10 +116,11 @@ const Customers = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
+      // A rota pode continuar a mesma, mas agora ela retorna todos os tipos
       const response = await api.get('/customers');
       setCustomers(response.data.customers || []);
     } catch (error) {
-      console.error("Erro ao carregar clientes:", error);
+      console.error("Erro ao carregar cadastros:", error);
       setCustomers([]);
     } finally {
       setLoading(false);
@@ -107,19 +142,19 @@ const Customers = () => {
       fetchCustomers();
       handleModalClose();
     } catch (error) {
-      console.error("Erro ao salvar cliente:", error);
-      alert("Não foi possível salvar o cliente.");
+      console.error("Erro ao salvar cadastro:", error);
+      alert(`Não foi possível salvar o cadastro: ${error.response?.data?.error || 'Erro desconhecido'}`);
     }
   };
 
   const handleDeleteCustomer = async (customerId) => {
-    if (window.confirm("Tem certeza que deseja excluir este cliente?")) {
+    if (window.confirm("Tem certeza que deseja excluir este cadastro?")) {
       try {
         await api.delete(`/customers/${customerId}`);
         fetchCustomers();
       } catch (error) {
-        console.error("Erro ao excluir cliente:", error);
-        alert("Não foi possível excluir o cliente.");
+        console.error("Erro ao excluir cadastro:", error);
+        alert(`Não foi possível excluir: ${error.response?.data?.error || 'Verifique as dependências.'}`);
       }
     }
   };
@@ -129,26 +164,40 @@ const Customers = () => {
     (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // Função para estilizar a badge de tipo
+  const getTypeBadge = (type) => {
+    switch (type) {
+      case 'cliente':
+        return <Badge variant="default" className="bg-blue-600">Cliente</Badge>;
+      case 'fornecedor':
+        return <Badge variant="secondary" className="bg-orange-500 text-white">Fornecedor</Badge>;
+      case 'ambos':
+        return <Badge variant="outline" className="bg-purple-600 text-white">Ambos</Badge>;
+      default:
+        return <Badge variant="outline">Indefinido</Badge>;
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">
             <Users className="mr-3 h-8 w-8" />
-            Clientes
+            Cadastros
           </h1>
-          <p className="text-gray-600">Gerencie sua base de clientes.</p>
+          <p className="text-gray-600">Gerencie sua base de clientes e fornecedores.</p>
         </div>
         <Button onClick={() => { setEditingCustomer(null); setIsModalOpen(true); }}>
           <Plus className="w-4 h-4 mr-2" />
-          Novo Cliente
+          Novo Cadastro
         </Button>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Todos os Clientes</CardTitle>
+            <CardTitle>Todos os Cadastros</CardTitle>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
@@ -168,17 +217,21 @@ const Customers = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
+                  {/* ▼▼▼ NOVA COLUNA DE TIPO ▼▼▼ */}
+                  <TableHead>Tipo</TableHead>
                   <TableHead className="text-right w-[120px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin w-6 h-6 mx-auto text-gray-400" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin w-6 h-6 mx-auto text-gray-400" /></TableCell></TableRow>
                 ) : filteredCustomers.length > 0 ? filteredCustomers.map(customer => (
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell>{customer.email || '---'}</TableCell>
                     <TableCell>{customer.phone || '---'}</TableCell>
+                    {/* ▼▼▼ RENDERIZA A BADGE DE TIPO ▼▼▼ */}
+                    <TableCell>{getTypeBadge(customer.type)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEditingCustomer(customer); setIsModalOpen(true); }}>
@@ -191,7 +244,7 @@ const Customers = () => {
                     </TableCell>
                   </TableRow>
                 )) : (
-                  <TableRow><TableCell colSpan={4} className="h-24 text-center">Nenhum cliente encontrado.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhum cadastro encontrado.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -202,7 +255,7 @@ const Customers = () => {
       <Modal
         open={isModalOpen}
         onClose={handleModalClose}
-        title={editingCustomer ? 'Editar Cliente' : 'Novo Cliente'}
+        title={editingCustomer ? 'Editar Cadastro' : 'Novo Cadastro'}
       >
         <CustomerForm
           customer={editingCustomer}

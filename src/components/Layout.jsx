@@ -5,20 +5,22 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { Button } from '@/components/ui/button';
 import { 
+  Home, 
   Package, 
-  Users, 
+  Layers, 
+  Grid3X3, 
+  Tag, 
   ShoppingCart, 
+  Landmark, 
+  CreditCard, 
+  Users, 
   BarChart3, 
-  Menu, 
-  X, 
+  Settings,
   LogOut,
-  Home,
-  Layers,
-  Grid3X3,
-  Landmark,
-  CreditCard // Ícone mais apropriado para Formas de Pagamento
+  Menu, 
 } from 'lucide-react';
 import '../App.css';
+import { href } from 'react-router-dom';
 
 const Layout = () => { 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -33,17 +35,22 @@ const Layout = () => {
 
   // Array de navegação com o link e nome corrigidos
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Produtos', href: '/products', icon: Package },
-    { name: 'Seções', href: '/sections', icon: Layers },
-    { name: 'Grupos', href: '/groups', icon: Grid3X3 },
-    { name: 'Transações', href: '/transactions', icon: ShoppingCart },
-    { name: 'Financeiro', href: '/finance', icon: Landmark },
-    { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard }, // NOME E LINK CORRIGIDOS
-    { name: 'Clientes', href: '/customers', icon: Users },
-    { name: 'Usuários', href: '/users', icon: Users },
-    { name: 'Relatórios', href: '/reports', icon: BarChart3 },
-  ];
+  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Produtos', href: '/products', icon: Package },
+  { name: 'Seções', href: '/sections', icon: Layers },
+  { name: 'Grupos', href: '/groups', icon: Grid3X3 }, // Grid3X3 também funciona, Grid3D é outra opção
+  
+  // ▼▼▼ CORREÇÃO APLICADA AQUI ▼▼▼
+  { name: 'Pré-Vendas', href: '/pre-sales', icon: Tag }, // O href agora é '/pre-sales'
+
+  { name: 'Transações', href: '/transactions', icon: ShoppingCart },
+  { name: 'Financeiro', href: '/finance', icon: Landmark },
+  { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard },
+  { name: 'Cadastros', href: '/customers', icon: Users }, // Sugestão: Renomear para "Cadastros"
+  { name: 'Usuários', href: '/users', icon: Users }, // Talvez usar um ícone diferente, como UserCog
+  { name: 'Relatórios', href: '/reports', icon: BarChart3 },
+  { name: 'Configurações', href: '/settings', icon: Settings }, // Renomeado para "Configurações"
+];
 
   return (
     <div className="min-h-screen bg-gray-50">

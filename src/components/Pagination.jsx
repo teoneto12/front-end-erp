@@ -5,31 +5,30 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Pagination = ({ pagination, onPageChange, itemName = 'itens' }) => {
-  // Não renderiza se não houver paginação ou apenas uma página
-  if (!pagination || pagination.totalPages <= 1) {
+  // Não renderiza se não houver dados de paginação ou se houver apenas uma página
+  if (!pagination || pagination.pages <= 1) {
     return null;
   }
 
-  // ▼▼▼ CORREÇÃO APLICADA AQUI ▼▼▼
-  // Usando os nomes corretos enviados pelo backend: 'currentPage', 'totalPages', 'totalItems'
-  const { currentPage, totalPages, totalItems } = pagination;
+  // Usando os nomes corretos que vêm do backend: 'page', 'pages', 'total'
+  const { page, pages, total } = pagination;
 
   // Lógica para singular/plural
-  const displayedItemName = totalItems === 1 ? itemName.replace(/s$/, '') : itemName;
+  const displayedItemName = total === 1 ? itemName.replace(/s$/, '') : itemName;
 
   return (
     <div className="flex items-center justify-between mt-4 pt-4 border-t" aria-label="Paginação">
       <div>
         <p className="text-sm text-gray-700">
-          Página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span> ({totalItems} {displayedItemName})
+          Página <span className="font-medium">{page}</span> de <span className="font-medium">{pages}</span> ({total} {displayedItemName})
         </p>
       </div>
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
           aria-label="Ir para a página anterior"
         >
           <ChevronLeft className="h-4 w-4 mr-1" />
@@ -38,8 +37,8 @@ const Pagination = ({ pagination, onPageChange, itemName = 'itens' }) => {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === pages}
           aria-label="Ir para a próxima página"
         >
           Próxima
