@@ -1,12 +1,10 @@
-// frontend/src/pages/PreSales.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Loader2, Download, CheckCircle, XCircle, MoreHorizontal, Edit, Copy } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Plus, Loader2, Download, CheckCircle, Ban, MoreHorizontal, Edit, Copy, Printer } from 'lucide-react'; // Importe o ícone Printer
 import Pagination from '../components/Pagination';
 import PreSaleForm from '../components/PreSaleForm';
 import Modal from '../components/Modal';
@@ -42,15 +40,27 @@ const PreSales = () => {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (preSale) => {
-    setEditingPreSale({ ...preSale, action: 'edit' });
-    setIsModalOpen(true);
+  const handleEdit = (event, preSale) => {
+    event.preventDefault();
+    api.get(`/pre-sales/${preSale.id}`).then(response => {
+      setEditingPreSale({ ...response.data, action: 'edit' });
+      setIsModalOpen(true);
+    }).catch(err => {
+      toast.error("Erro ao carregar dados para edição.");
+      console.error(err);
+    });
   };
 
-  const handleDuplicate = (preSale) => {
-    const { id, ...preSaleToDuplicate } = preSale;
-    setEditingPreSale({ ...preSaleToDuplicate, action: 'duplicate' });
-    setIsModalOpen(true);
+  const handleDuplicate = (event, preSale) => {
+    event.preventDefault();
+    api.get(`/pre-sales/${preSale.id}`).then(response => {
+      const { id, created_at, status, pre_sale_number, ...preSaleToDuplicate } = response.data;
+      setEditingPreSale({ ...preSaleToDuplicate, action: 'duplicate' });
+      setIsModalOpen(true);
+    }).catch(err => {
+      toast.error("Erro ao carregar dados para duplicação.");
+      console.error(err);
+    });
   };
 
   const handleSave = () => {
@@ -59,38 +69,67 @@ const PreSales = () => {
     fetchPreSales(pagination?.page || 1);
   };
 
-  // ▼▼▼ ALTERAÇÃO NA FUNÇÃO DE EXPORTAÇÃO ▼▼▼
-  const handleExport = async (preSaleNumber) => {
-    // A URL agora usa o número sequencial da pré-venda
+  const handleExport = async (event, preSaleNumber) => {
+    event.preventDefault();
     const promise = api.post(`/pre-sales/export/${preSaleNumber}`);
-
     toast.promise(promise, {
-      loading: 'Exportando para o PDV...',
-      success: (res) => res.data.message || 'Pré-venda exportada com sucesso!',
+      loading: 'Gerando arquivo de exportação...',
+      success: (res) => res.data.message || 'Arquivo gerado com sucesso!',
       error: (err) => `Erro ao exportar: ${err.response?.data?.error || err.message}`,
     });
-
     try {
       await promise;
       fetchPreSales(pagination?.page || 1);
+    } catch (error) { /* O toast já trata o erro */ }
+  };
+
+  const handleCancel = async (event, preSaleId) => {
+    event.preventDefault();
+    if (!window.confirm("Tem certeza que deseja cancelar esta pré-venda? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+    const promise = api.patch(`/pre-sales/cancel/${preSaleId}`);
+    toast.promise(promise, {
+      loading: 'Cancelando pré-venda...',
+      success: 'Pré-venda cancelada com sucesso!',
+      error: (err) => `Erro ao cancelar: ${err.response?.data?.error || err.message}`,
+    });
+    try {
+      await promise;
+      fetchPreSales(pagination?.page || 1);
+    } catch (error) { /* O toast já trata o erro */ }
+  };
+
+  // ▼▼▼ NOVA FUNÇÃO PARA IMPRIMIR O COMPROVANTE ▼▼▼
+  const handlePrintReceipt = async (event, preSaleId) => {
+    event.preventDefault();
+    const toastId = toast.loading('Gerando comprovante em PDF...');
+    try {
+      const response = await api.get(`/pre-sales/receipt/${preSaleId}`, {
+        responseType: 'blob', // Trata a resposta como um arquivo binário
+      });
+      
+      const file = new Blob([response.data], { type: 'application/pdf' });
+      const fileURL = URL.createObjectURL(file);
+      
+      // Abre o PDF em uma nova aba
+      window.open(fileURL, '_blank');
+      toast.success('Comprovante gerado!', { id: toastId });
+      
     } catch (error) {
-      // O toast já trata o erro
+      console.error("Erro ao gerar o comprovante:", error);
+      toast.error("Não foi possível gerar o comprovante.", { id: toastId });
     }
   };
-  // ▲▲▲ ALTERAÇÃO NA FUNÇÃO DE EXPORTAÇÃO ▲▲▲
+  // ▲▲▲ FIM DA NOVA FUNÇÃO ▲▲▲
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'gerada':
-        return <span className="bg-blue-100 text-blue-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">Gerada</span>;
-      case 'exportada':
-        return <span className="bg-yellow-100 text-yellow-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">Exportada</span>;
-      case 'finalizada':
-        return <span className="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Finalizada</span>;
-      case 'cancelada':
-        return <span className="bg-red-100 text-red-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded flex items-center"><XCircle className="w-3 h-3 mr-1" /> Cancelada</span>;
-      default:
-        return <span className="bg-gray-100 text-gray-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">{status}</span>;
+      case 'gerada': return <span className="bg-blue-100 text-blue-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">Gerada</span>;
+      case 'exportada': return <span className="bg-yellow-100 text-yellow-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">Exportada</span>;
+      case 'finalizada': return <span className="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Finalizada</span>;
+      case 'cancelada': return <span className="bg-red-100 text-red-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded flex items-center"><Ban className="w-3 h-3 mr-1" /> Cancelada</span>;
+      default: return <span className="bg-gray-100 text-gray-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">{status}</span>;
     }
   };
 
@@ -106,7 +145,6 @@ const PreSales = () => {
           Nova Pré-venda
         </Button>
       </div>
-
       <Card>
         <CardHeader><CardTitle>Histórico de Pré-vendas</CardTitle></CardHeader>
         <CardContent>
@@ -134,31 +172,39 @@ const PreSales = () => {
                     <TableCell>{getStatusBadge(ps.status)}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Abrir menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Abrir menu</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {ps.status === 'gerada' && (
-                            // ▼▼▼ ALTERAÇÃO NA CHAMADA DA FUNÇÃO ▼▼▼
-                            <DropdownMenuItem onClick={() => handleExport(ps.pre_sale_number)}>
-                              <Download className="mr-2 h-4 w-4" />
-                              <span>Exportar para PDV</span>
-                            </DropdownMenuItem>
-                            // ▲▲▲ ALTERAÇÃO NA CHAMADA DA FUNÇÃO ▲▲▲
-                          )}
-                          {ps.status === 'gerada' && (
-                            <DropdownMenuItem onClick={() => handleEdit(ps)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              <span>Editar</span>
+                          
+                          {/* Ação de imprimir disponível para a maioria dos status */}
+                          {(ps.status === 'gerada' || ps.status === 'exportada' || ps.status === 'finalizada') && (
+                            <DropdownMenuItem onSelect={(e) => handlePrintReceipt(e, ps.id)}>
+                              <Printer className="mr-2 h-4 w-4" />
+                              <span>Imprimir Comprovante</span>
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem onClick={() => handleDuplicate(ps)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            <span>Refazer (Duplicar)</span>
-                          </DropdownMenuItem>
+
+                          {ps.status === 'gerada' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={(e) => handleExport(e, ps.pre_sale_number)}><Download className="mr-2 h-4 w-4" /><span>Exportar</span></DropdownMenuItem>
+                              <DropdownMenuItem onSelect={(e) => handleEdit(e, ps)}><Edit className="mr-2 h-4 w-4" /><span>Editar</span></DropdownMenuItem>
+                              <DropdownMenuItem className="text-red-600 focus:text-red-600" onSelect={(e) => handleCancel(e, ps.id)}><Ban className="mr-2 h-4 w-4" /><span>Cancelar</span></DropdownMenuItem>
+                            </>
+                          )}
+                          
+                          {ps.status === 'exportada' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={(e) => handleExport(e, ps.pre_sale_number)}><Download className="mr-2 h-4 w-4" /><span>Reexportar</span></DropdownMenuItem>
+                            </>
+                          )}
+
+                          {ps.status !== 'cancelada' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={(e) => handleDuplicate(e, ps)}><Copy className="mr-2 h-4 w-4" /><span>Refazer (Duplicar)</span></DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -169,21 +215,10 @@ const PreSales = () => {
               </TableBody>
             </Table>
           </div>
-          {pagination && pagination.pages > 1 && (
-            <Pagination pagination={pagination} onPageChange={fetchPreSales} itemName="pré-vendas" />
-          )}
+          {pagination && pagination.pages > 1 && (<Pagination pagination={pagination} onPageChange={fetchPreSales} itemName="pré-vendas" />)}
         </CardContent>
       </Card>
-
-      <Modal 
-        open={isModalOpen} 
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingPreSale(null);
-        }} 
-        title={editingPreSale?.action === 'edit' ? 'Editar Pré-venda' : editingPreSale?.action === 'duplicate' ? 'Refazer Pré-venda' : 'Criar Nova Pré-venda'}
-        className="max-w-6xl"
-      >
+      <Modal open={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingPreSale(null); }} title={editingPreSale?.action === 'edit' ? 'Editar Pré-venda' : editingPreSale?.action === 'duplicate' ? 'Refazer Pré-venda' : 'Criar Nova Pré-venda'} className="max-w-6xl">
         <PreSaleForm onSave={handleSave} preSaleData={editingPreSale} />
       </Modal>
     </div>

@@ -1,206 +1,213 @@
-// frontend/src/components/PreSaleForm.jsx
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { useAuth } from '../hooks/useAuth';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Trash2, Loader2, Save } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { Label } from '@/components/ui/label';
+import { Trash2 } from 'lucide-react';
+import ProductSearch from './ProductSearch';
+import CustomerSearch from './CustomerSearch';
+import { useAuth } from '../hooks/useAuth'; // 1. IMPORTAR O HOOK DE AUTENTICAÇÃO
 
-const PreSaleForm = ({ onSave }) => {
-  const { user } = useAuth();
-  const [products, setProducts] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [productSearch, setProductSearch] = useState('');
-  const [cart, setCart] = useState([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+const PreSaleForm = ({ onSave, preSaleData }) => {
+  const { user } = useAuth(); // 2. PEGAR O USUÁRIO LOGADO DO CONTEXTO
+  const [items, setItems] = useState([]);
+  const [customer, setCustomer] = useState(null);
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const fetchProducts = useCallback(async (search = '') => {
-    try {
-      const response = await api.get('/products', { params: { limit: 10, search } });
-      setProducts(response.data.products || []);
-    } catch (error) {
-      console.error("Erro ao buscar produtos:", error);
-    }
-  }, []);
+  // ... (o resto dos seus useEffects e handlers não mudam)
 
   useEffect(() => {
-    fetchProducts();
-    const fetchCustomers = async () => {
-      try {
-        const response = await api.get('/customers', { params: { limit: 1000 } });
-        setCustomers(response.data.customers || []);
-      } catch (error) {
-        console.error("Erro ao buscar clientes:", error);
-      }
-    };
-    fetchCustomers();
-  }, [fetchProducts]);
-
-  const handleProductSearch = (e) => {
-    const searchValue = e.target.value;
-    setProductSearch(searchValue);
-    if (debounceTimer) clearTimeout(debounceTimer);
-    const newTimer = setTimeout(() => fetchProducts(searchValue), 300);
-    setDebounceTimer(newTimer);
-  };
-
-  const addToCart = (product) => {
-    const existingItem = cart.find(item => item.product_id === product.id);
-    if (existingItem) {
-      setCart(cart.map(item => item.product_id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
+    if (preSaleData) {
+      setItems(preSaleData.items || []);
+      setCustomer(preSaleData.customer || null);
+      setNotes(preSaleData.notes || '');
     } else {
-      setCart([...cart, {
-        product_id: product.id,
-        name: product.name,
-        quantity: 1,
-        unit_price: product.price,
-        discount_amount: 0
-      }]);
+      setItems([]);
+      setCustomer(null);
+      setNotes('');
     }
-  };
+  }, [preSaleData]);
 
-  const removeFromCart = (productId) => {
-    setCart(cart.filter(item => item.product_id !== productId));
-  };
+  useEffect(() => {
+    const newTotal = items.reduce((sum, item) => {
+      const itemTotal = (parseFloat(item.quantity) * parseFloat(item.unit_price)) - (parseFloat(item.discount_amount) || 0);
+      return sum + itemTotal;
+    }, 0);
+    setTotal(newTotal);
+  }, [items]);
 
-  const totalAmount = cart.reduce((total, item) => total + (item.quantity * item.unit_price), 0);
-
-  const handleSubmit = async () => {
-    if (cart.length === 0) {
-      toast.error("Adicione pelo menos um produto à pré-venda.");
+  const handleAddProduct = (product) => {
+    const existingItem = items.find(item => item.product_id === product.id);
+    if (existingItem) {
+      toast.error("Este produto já foi adicionado.");
       return;
     }
-    setSubmitting(true);
-    const preSaleData = {
-      customer_id: selectedCustomerId || null,
+    setItems([...items, {
+      product_id: product.id,
+      name: product.name,
+      code: product.code,
+      quantity: 1,
+      unit_price: product.price,
+      discount_amount: 0,
+    }]);
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = [...items];
+    const val = parseFloat(value);
+    if (val >= 0 || value === '') {
+      updatedItems[index][field] = value;
+      setItems(updatedItems);
+    }
+  };
+
+  const handleRemoveItem = (index) => {
+    const updatedItems = items.filter((_, i) => i !== index);
+    setItems(updatedItems);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    // 3. VERIFICAR SE O USUÁRIO ESTÁ DISPONÍVEL
+    if (!user || !user.id) {
+      toast.error("Usuário não encontrado. Por favor, faça login novamente.");
+      setLoading(false);
+      return;
+    }
+
+    if (items.length === 0) {
+      toast.error("Adicione pelo menos um item à pré-venda.");
+      setLoading(false);
+      return;
+    }
+
+    const payload = {
+      // 4. USAR O ID DO USUÁRIO DO CONTEXTO
       user_id: user.id,
-      total_amount: totalAmount,
-      notes: notes,
-      items: cart.map(item => ({
+      customer_id: customer ? customer.id : null,
+      notes,
+      items: items.map(item => ({
         product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_amount: item.discount_amount,
+        quantity: parseFloat(item.quantity),
+        unit_price: parseFloat(item.unit_price),
+        discount_amount: parseFloat(item.discount_amount || 0),
       })),
     };
-    const promise = api.post('/pre-sales', preSaleData);
-    toast.promise(promise, {
-      loading: 'Salvando pré-venda...',
-      success: 'Pré-venda salva com sucesso!',
-      error: (err) => `Erro ao salvar: ${err.response?.data?.error || err.message}`,
-    });
+
     try {
-      await promise;
-      onSave();
+      let response;
+      if (preSaleData && preSaleData.action === 'edit') {
+        response = await api.put(`/pre-sales/${preSaleData.id}`, payload);
+        toast.success("Pré-venda atualizada com sucesso!");
+      } else {
+        response = await api.post('/pre-sales', payload);
+        toast.success("Pré-venda criada com sucesso!");
+      }
+      onSave(response.data);
     } catch (error) {
-      // O toast já trata o erro
+      console.error("Erro ao salvar pré-venda:", error);
+      toast.error(error.response?.data?.error || "Não foi possível salvar a pré-venda.");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4 max-w-6xl mx-auto">
-      {/* Lado Esquerdo: Busca de Produtos */}
-      <div>
-        <h3 className="font-semibold mb-2">Buscar Produtos</h3>
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <Input placeholder="Buscar por nome ou SKU..." value={productSearch} onChange={handleProductSearch} className="pl-10" />
-        </div>
-        <div className="border rounded-md h-[500px] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Produto</TableHead>
-                <TableHead className="text-right">Preço</TableHead>
-                <TableHead className="text-center">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.name}</TableCell>
-                  <TableCell className="text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.price)}</TableCell>
-                  <TableCell className="text-center">
-                    <Button size="sm" variant="outline" onClick={() => addToCart(p)}><Plus className="w-4 h-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Lado Direito: Carrinho e Detalhes */}
-      <div>
-        <h3 className="font-semibold mb-2">Detalhes da Pré-venda</h3>
-        <div className="space-y-4">
-          <div>
-            <Label>Cliente</Label>
-            {/* ▼▼▼ CORREÇÃO DEFINITIVA APLICADA AQUI ▼▼▼ */}
-            <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Consumidor Final" />
-              </SelectTrigger>
-              <SelectContent>
-                {customers
-                  .filter(c => c.id != null) // Filtra para garantir que o ID não seja nulo/undefined
-                  .map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))
-                }
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Observações</Label>
-            <Input placeholder="Informações adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <div className="border rounded-md h-80 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-center">Remover</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cart.length === 0 ? (
-                  <TableRow><TableCell colSpan={3} className="text-center h-24">Carrinho vazio</TableCell></TableRow>
-                ) : cart.map(item => (
-                  <TableRow key={item.product_id}>
-                    <TableCell>{item.quantity}x {item.name}</TableCell>
-                    <TableCell className="text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unit_price)}</TableCell>
-                    <TableCell className="text-center">
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removeFromCart(item.product_id)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                    </TableCell>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* O RESTO DO SEU JSX NÃO MUDA */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="font-semibold mb-2">Buscar Produto</h3>
+              <ProductSearch onProductSelect={handleAddProduct} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Produto</TableHead>
+                    <TableHead>Qtd.</TableHead>
+                    <TableHead>Vl. Unit.</TableHead>
+                    <TableHead>Desconto</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="text-right font-bold text-lg">
-            Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}
-          </div>
-          <Button onClick={handleSubmit} disabled={submitting || cart.length === 0} className="w-full">
-            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Salvar Pré-venda
-          </Button>
+                </TableHeader>
+                <TableBody>
+                  {items.length > 0 ? items.map((item, index) => (
+                    <TableRow key={item.product_id}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>
+                        <Input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className="w-20" step="1" min="1" />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={item.unit_price} onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)} className="w-24" step="0.01" min="0" />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={item.discount_amount || 0} onChange={(e) => handleItemChange(index, 'discount_amount', e.target.value)} className="w-24" step="0.01" min="0" />
+                      </TableCell>
+                      <TableCell>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                          (item.quantity * item.unit_price) - (item.discount_amount || 0)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" type="button" onClick={() => handleRemoveItem(index)}>
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center h-24">Nenhum item adicionado.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="font-semibold mb-2">Cliente</h3>
+              <CustomerSearch onCustomerSelect={setCustomer} initialCustomer={customer} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="font-semibold mb-2">Observações</h3>
+              <Textarea placeholder="Adicione observações à pré-venda..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold">Total</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </div>
+      <div className="flex justify-end pt-4">
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Salvando...' : 'Salvar Pré-venda'}
+        </Button>
+      </div>
+    </form>
   );
 };
 
