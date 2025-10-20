@@ -6,9 +6,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- LINHA DE DEBUG ---
-console.log("Caminho para @:", path.resolve(__dirname, "./src"));
-
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -16,4 +13,24 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-})
+
+  // ==================================================
+  // ▼▼▼ ADICIONE ESTE BLOCO PARA RESOLVER O PROBLEMA ▼▼▼
+  // ==================================================
+  server: {
+    proxy: {
+      // Qualquer requisição no frontend que comece com '/api'
+      '/api': {
+        // Será redirecionada para o seu servidor backend.
+        // **IMPORTANTE**: Altere 'http://localhost:3000' se o seu backend rodar em outra porta.
+        target: 'http://localhost:3000', 
+        
+        // Necessário para que o servidor de destino não recuse a requisição.
+        changeOrigin: true, 
+      }
+    }
+  }
+  // ==================================================
+  // ▲▲▲ FIM DO BLOCO ADICIONADO ▲▲▲
+  // ==================================================
+} )

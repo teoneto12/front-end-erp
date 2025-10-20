@@ -1,8 +1,8 @@
-// Em /src/App.jsx (VERSÃO CORRIGIDA E OTIMIZADA)
+// Em /src/App.jsx (VERSÃO ATUALIZADA E CORRIGIDA)
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './hooks/useAuth.js';
+import { AuthProvider } from './hooks/useAuth.js'; // Removido 'useAuth' que não estava sendo usado aqui
 
 // Componentes de Layout e Proteção
 import Layout from './components/Layout';
@@ -23,6 +23,10 @@ import Customers from './pages/Customers.jsx';
 import PaymentMethods from './pages/PaymentMethods.jsx';
 import PreSales from './pages/PreSales.jsx';
 import Settings from './pages/Settings.jsx';
+// --- Renomeando para consistência ---
+import ReportsPage from './pages/Reports.jsx';
+import SalesByPeriodPage from './pages/reports/SalesByPeriodPage.jsx';
+import SalesByPaymentMethodPage from './pages/reports/SalesByPaymentMethodPage.jsx';
 import './App.css';
 
 // Componente que define a estrutura de rotas
@@ -32,7 +36,10 @@ function AppRoutes() {
       {/* Rota de Login: Fica fora do grupo de rotas protegidas */}
       <Route path="/login" element={<Login />} />
 
-      {/* Rota Pai Protegida: Todas as rotas aqui dentro exigem autenticação e usam o Layout */}
+      {/* ================================================================= */}
+      {/* ▼▼▼ ESTRUTURA DE ROTA PAI CORRIGIDA ▼▼▼ */}
+      {/* ================================================================= */}
+      {/* Esta rota pai aplica o Layout e a Proteção a TODAS as rotas filhas */}
       <Route
         path="/"
         element={
@@ -41,10 +48,10 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* A rota 'index' é a página inicial (/) */}
+        {/* A rota 'index' é a página inicial (/) renderizada dentro do Layout */}
         <Route index element={<Dashboard />} />
         
-        {/* Todas as outras rotas são relativas ao pai ('/') */}
+        {/* Todas as outras rotas são relativas ao pai ('/') e também renderizadas dentro do Layout */}
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/edit/:id" element={<ProductForm />} />
@@ -56,21 +63,25 @@ function AppRoutes() {
         <Route path="transactions" element={<Transactions />} />
         <Route path="users" element={<Users />} />
         <Route path="payment-methods" element={<PaymentMethods />} />
-        
-        {/* ▼▼▼ ROTAS CORRIGIDAS ▼▼▼ */}
         <Route path="pre-sales" element={<PreSales />} />
         <Route path="settings" element={<Settings />} />
         
-        <Route path="reports" element={<div>Relatórios - Em desenvolvimento</div>} />
+        {/* --- ROTAS DE RELATÓRIO (AGORA CORRETAMENTE ANINHADAS) --- */}
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/sales-by-period" element={<SalesByPeriodPage />} />
+        <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
         
         {/* Rota "catch-all" para redirecionar para a dashboard caso a URL não exista */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+      {/* ================================================================= */}
+      {/* ▲▲▲ FIM DA ESTRUTURA CORRIGIDA ▲▲▲ */}
+      {/* ================================================================= */}
     </Routes>
   );
 }
 
-// O componente App principal
+// O componente App principal (sem alterações)
 function App() {
   return (
     <AuthProvider>
