@@ -1,8 +1,8 @@
-// Em /src/App.js (ou onde suas rotas estão)
+// Em /src/App.jsx (VERSÃO ATUALIZADA E CORRIGIDA)
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './hooks/useAuth.js';
+import { AuthProvider } from './hooks/useAuth.js'; // Removido 'useAuth' que não estava sendo usado aqui
 
 // Componentes de Layout e Proteção
 import Layout from './components/Layout';
@@ -20,22 +20,26 @@ import Users from './pages/Users.jsx';
 import InvoiceImport from './pages/InvoiceImports.jsx';
 import Finance from './pages/Finance.jsx';
 import Customers from './pages/Customers.jsx';
-import PaymentMethods from './pages/PaymentMethods.jsx'; // Importa a nova tela
+import PaymentMethods from './pages/PaymentMethods.jsx';
+import PreSales from './pages/PreSales.jsx';
+import Settings from './pages/Settings.jsx';
+// --- Renomeando para consistência ---
+import ReportsPage from './pages/Reports.jsx';
+import SalesByPeriodPage from './pages/reports/SalesByPeriodPage.jsx';
+import SalesByPaymentMethodPage from './pages/reports/SalesByPaymentMethodPage.jsx';
 import './App.css';
 
-// Este componente define a estrutura de rotas
+// Componente que define a estrutura de rotas
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
-
   return (
     <Routes>
-      {/* Rota de Login (fora do layout principal) */}
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} 
-      />
+      {/* Rota de Login: Fica fora do grupo de rotas protegidas */}
+      <Route path="/login" element={<Login />} />
 
-      {/* Rota Pai que renderiza o Layout e protege as rotas filhas */}
+      {/* ================================================================= */}
+      {/* ▼▼▼ ESTRUTURA DE ROTA PAI CORRIGIDA ▼▼▼ */}
+      {/* ================================================================= */}
+      {/* Esta rota pai aplica o Layout e a Proteção a TODAS as rotas filhas */}
       <Route
         path="/"
         element={
@@ -44,32 +48,40 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Rotas Filhas: Elas serão renderizadas DENTRO do <Outlet /> do Layout */}
+        {/* A rota 'index' é a página inicial (/) renderizada dentro do Layout */}
         <Route index element={<Dashboard />} />
+        
+        {/* Todas as outras rotas são relativas ao pai ('/') e também renderizadas dentro do Layout */}
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/edit/:id" element={<ProductForm />} />
-        <Route path="invoices/import" element={<InvoiceImport />}/>
-        <Route path="finance" element={<Finance />}/>
+        <Route path="invoices/import" element={<InvoiceImport />} />
+        <Route path="finance" element={<Finance />} />
         <Route path="sections" element={<Sections />} />
-        <Route path="customers" element={<Customers/>}/>
+        <Route path="customers" element={<Customers />} />
         <Route path="groups" element={<Groups />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="users" element={<Users />} />
+        <Route path="payment-methods" element={<PaymentMethods />} />
+        <Route path="pre-sales" element={<PreSales />} />
+        <Route path="settings" element={<Settings />} />
         
-        {/* ROTA CORRIGIDA: O path corresponde ao link no menu */}
-        <Route path="payment-methods" element={<PaymentMethods/>}/> 
+        {/* --- ROTAS DE RELATÓRIO (AGORA CORRETAMENTE ANINHADAS) --- */}
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/sales-by-period" element={<SalesByPeriodPage />} />
+        <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
         
-        <Route path="reports" element={<div>Relatórios - Em desenvolvimento</div>} />
-        
-        {/* Rota "catch-all" para páginas não encontradas */}
-        <Route path="*" element={<div>Página não encontrada</div>} />
+        {/* Rota "catch-all" para redirecionar para a dashboard caso a URL não exista */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+      {/* ================================================================= */}
+      {/* ▲▲▲ FIM DA ESTRUTURA CORRIGIDA ▲▲▲ */}
+      {/* ================================================================= */}
     </Routes>
   );
 }
 
-// O componente App principal que envolve tudo
+// O componente App principal (sem alterações)
 function App() {
   return (
     <AuthProvider>

@@ -1,3 +1,5 @@
+// frontend/src/components/Dashboard.jsx
+
 import React from 'react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -80,7 +82,7 @@ const Dashboard = ({ transactions }) => {
   
   const paymentMethodChartData = Object.keys(paymentMethodData).map(name => ({
     name,
-    Total: paymentMethodData[name],
+    'Total Vendido': paymentMethodData[name], // Corrigido para corresponder ao dataKey da Bar
   }));
 
   return (

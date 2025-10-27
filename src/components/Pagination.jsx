@@ -1,22 +1,19 @@
-import React from 'react'; // É uma boa prática manter a importação do React
+// frontend/src/components/Pagination.jsx
+
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// ==================================================================
-// CORREÇÃO:
-// 1. Adicionada a propriedade 'itemName' com um valor padrão 'itens'.
-// 2. O texto agora usa essa propriedade para ser dinâmico.
-// 3. Adicionada uma lógica simples para remover o 's' do final se o total for 1.
-// ==================================================================
 const Pagination = ({ pagination, onPageChange, itemName = 'itens' }) => {
-  // Não renderiza nada se não houver dados de paginação ou se houver apenas uma página
+  // Não renderiza se não houver dados de paginação ou se houver apenas uma página
   if (!pagination || pagination.pages <= 1) {
     return null;
   }
 
+  // Usando os nomes corretos que vêm do backend: 'page', 'pages', 'total'
   const { page, pages, total } = pagination;
 
-  // Lógica para exibir o nome do item no singular ou plural
+  // Lógica para singular/plural
   const displayedItemName = total === 1 ? itemName.replace(/s$/, '') : itemName;
 
   return (
