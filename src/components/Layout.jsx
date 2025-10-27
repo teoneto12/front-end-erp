@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Home, Package, Layers, Grid3X3, Tag, ShoppingCart, Landmark, CreditCard, 
   Users, BarChart3, Settings, LogOut, Menu, X, Soup // Adicionado o ícone X e Soup
-} from 'lucide-react';
+} from 'lucide-react';''
 import '../App.css';
 
 const Layout = () => { 
