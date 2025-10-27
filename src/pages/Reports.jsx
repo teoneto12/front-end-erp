@@ -1,8 +1,11 @@
+// src/pages/ReportsPage.jsx (ou Reports.jsx)
+
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { List, DollarSign, ShoppingCart, Users, BarChart } from 'lucide-react';
+import { List, DollarSign, ShoppingCart, BarChart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+// Array com todos os relatórios e seus caminhos corretos
 const reportList = [
   {
     category: 'Relatórios Financeiros',

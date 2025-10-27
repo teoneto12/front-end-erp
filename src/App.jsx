@@ -1,14 +1,14 @@
-// Em /src/App.jsx (VERSÃO ATUALIZADA E CORRIGIDA)
+// Em /src/App.jsx (VERSÃO FINAL COMPLETA E REESCRITA)
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './hooks/useAuth.js'; // Removido 'useAuth' que não estava sendo usado aqui
+import { AuthProvider } from './hooks/useAuth.js';
 
-// Componentes de Layout e Proteção
+// --- Componentes de Estrutura ---
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// Páginas
+// --- Páginas Principais ---
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products.jsx';
@@ -23,23 +23,27 @@ import Customers from './pages/Customers.jsx';
 import PaymentMethods from './pages/PaymentMethods.jsx';
 import PreSales from './pages/PreSales.jsx';
 import Settings from './pages/Settings.jsx';
-// --- Renomeando para consistência ---
-import ReportsPage from './pages/Reports.jsx';
+
+// --- Páginas de Relatórios ---
+import ReportsPage from './pages/Reports.jsx'; // A página de menu dos relatórios
 import SalesByPeriodPage from './pages/reports/SalesByPeriodPage.jsx';
 import SalesByPaymentMethodPage from './pages/reports/SalesByPaymentMethodPage.jsx';
+import TopSellingProductsReport from './pages/reports/TopSellingProductsReport.jsx';
+import SalesByUserReport from './pages/reports/SalesByUserReport.jsx';
+import ProductListReport from './pages/reports/ProductListReport.jsx';
+import CustomerListReport from './pages/reports/CustomerListReport.jsx';
+
+// --- Estilos Globais ---
 import './App.css';
 
-// Componente que define a estrutura de rotas
+// Componente que define a estrutura de rotas da aplicação
 function AppRoutes() {
   return (
     <Routes>
-      {/* Rota de Login: Fica fora do grupo de rotas protegidas */}
+      {/* Rota pública de Login */}
       <Route path="/login" element={<Login />} />
 
-      {/* ================================================================= */}
-      {/* ▼▼▼ ESTRUTURA DE ROTA PAI CORRIGIDA ▼▼▼ */}
-      {/* ================================================================= */}
-      {/* Esta rota pai aplica o Layout e a Proteção a TODAS as rotas filhas */}
+      {/* Rota "Pai" que aplica o Layout e a proteção a todas as rotas aninhadas */}
       <Route
         path="/"
         element={
@@ -48,40 +52,45 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* A rota 'index' é a página inicial (/) renderizada dentro do Layout */}
+        {/* Página Inicial (Dashboard) */}
         <Route index element={<Dashboard />} />
         
-        {/* Todas as outras rotas são relativas ao pai ('/') e também renderizadas dentro do Layout */}
+        {/* Rotas de Gestão */}
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/edit/:id" element={<ProductForm />} />
         <Route path="invoices/import" element={<InvoiceImport />} />
-        <Route path="finance" element={<Finance />} />
         <Route path="sections" element={<Sections />} />
-        <Route path="customers" element={<Customers />} />
         <Route path="groups" element={<Groups />} />
-        <Route path="transactions" element={<Transactions />} />
+        <Route path="customers" element={<Customers />} />
         <Route path="users" element={<Users />} />
-        <Route path="payment-methods" element={<PaymentMethods />} />
-        <Route path="pre-sales" element={<PreSales />} />
-        <Route path="settings" element={<Settings />} />
         
-        {/* --- ROTAS DE RELATÓRIO (AGORA CORRETAMENTE ANINHADAS) --- */}
+        {/* Rotas de Vendas e Financeiro */}
+        <Route path="transactions" element={<Transactions />} />
+        <Route path="pre-sales" element={<PreSales />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="payment-methods" element={<PaymentMethods />} />
+        
+        {/* Rotas de Relatórios */}
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/sales-by-period" element={<SalesByPeriodPage />} />
         <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
+        <Route path="reports/top-selling-products" element={<TopSellingProductsReport />} />
+        <Route path="reports/sales-by-user" element={<SalesByUserReport />} />
+        <Route path="reports/product-list" element={<ProductListReport />} />
+        <Route path="reports/customer-list" element={<CustomerListReport />} />
+
+        {/* Rota de Configurações */}
+        <Route path="settings" element={<Settings />} />
         
-        {/* Rota "catch-all" para redirecionar para a dashboard caso a URL não exista */}
+        {/* Rota "catch-all": Se nenhuma rota acima for encontrada, redireciona para a página inicial */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      {/* ================================================================= */}
-      {/* ▲▲▲ FIM DA ESTRUTURA CORRIGIDA ▲▲▲ */}
-      {/* ================================================================= */}
     </Routes>
   );
 }
 
-// O componente App principal (sem alterações)
+// Componente principal que envolve a aplicação com provedores de contexto
 function App() {
   return (
     <AuthProvider>
@@ -91,7 +100,7 @@ function App() {
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#363636',
+              background: '#333', // Cor ligeiramente ajustada para melhor contraste
               color: '#fff',
             },
           }}
