@@ -19,14 +19,21 @@ import Dashboard from '../components/Dashboard';
 import { exportToPDF } from '../lib/pdfGenerator.js';
 
 // ==================================================================
-// COMPONENTE PARA O MODAL DE OPÇÕES DE RECIBO
+// COMPONENTE PARA O MODAL DE OPÇÕES DE RECIBO (COM TROCO)
 // ==================================================================
-const ReceiptOptionsModal = ({ transaction, onPrint, onPDF, onClose }) => {
+const ReceiptOptionsModal = ({ transaction, change, onPrint, onPDF, onClose }) => {
+  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
+  
   return (
     <div className="space-y-4">
-      <p className="text-center text-lg">Venda #{transaction.sale_number} finalizada com sucesso!</p>
-      <p className="text-center text-gray-600">Como você deseja gerar o comprovante?</p>
-      <div className="flex justify-center gap-4 pt-4">
+      <p className="text-center text-xl font-semibold">Venda #{transaction.sale_number} finalizada!</p>
+      {change > 0 && (
+        <div className="text-center text-2xl font-bold text-green-600 bg-green-50 p-3 rounded-lg">
+          Troco: {formatCurrency(change)}
+        </div>
+      )}
+      <p className="text-center text-gray-600 pt-2">Como você deseja gerar o comprovante?</p>
+      <div className="flex justify-center gap-4 pt-2">
         <Button onClick={onPrint} className="bg-blue-600 hover:bg-blue-700">
           <Printer className="w-4 h-4 mr-2" />
           Imprimir Cupom
@@ -75,6 +82,7 @@ const Transactions = () => {
   // --- ESTADOS DO MODAL DE OPÇÕES DE RECIBO ---
   const [showReceiptOptions, setShowReceiptOptions] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
+  const [lastChange, setLastChange] = useState(0); // Estado para armazenar o último troco
 
   // --- FUNÇÕES DE BUSCA (API) ---
   const fetchTransactions = useCallback(async (page = 1, search = '', dates = {}) => {
@@ -136,12 +144,36 @@ const Transactions = () => {
   const formatDate = (dateString) => new Date(dateString).toLocaleString('pt-BR');
   const toggleTransactionDetails = (id) => setExpandedTransactionId(prevId => (prevId === id ? null : id));
 
-  const handlePrintReceipt = (transaction) => {
+  const handlePrintReceipt = (transaction, change = 0) => {
     const itemsHtml = (transaction.items || []).map(item => `<div style="display: flex; justify-content: space-between;"><span>${item.quantity}x ${item.product_name}</span><span>${formatCurrency(item.subtotal)}</span></div>`).join('');
     const paymentsHtml = (transaction.payments || []).map(p => `<div style="display: flex; justify-content: space-between;"><span>${p.payment_method_name}:</span><span>${formatCurrency(p.amount)}</span></div>`).join('');
     const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal || 0), 0);
     const discountAmount = transaction.discount_percent > 0 ? (subtotal * (transaction.discount_percent / 100)) : 0;
-    const receiptContent = `<div style="font-family: monospace; width: 300px; margin: auto; padding: 15px; font-size: 12px;"><h2 style="text-align: center;">Recibo</h2><p><strong>Venda:</strong> ${transaction.sale_number}</p><p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p><p><strong>Operador:</strong> ${transaction.cashier_name}</p><hr><h3 style="margin-bottom: 5px;">Itens:</h3>${itemsHtml}<hr><div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${formatCurrency(subtotal)}</span></div>${discountAmount > 0 ? `<div style="display: flex; justify-content: space-between; color: red;"><span>Desconto:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}<hr><div style="display: flex; justify-content: space-between; font-weight: bold;"><span>TOTAL:</span><span>${formatCurrency(transaction.total_amount)}</span></div><hr><h3 style="margin-bottom: 5px;">Pagamentos:</h3>${paymentsHtml}<hr><p style="text-align: center; margin-top: 10px;">Obrigado!</p></div>`;
+    const totalPaidReceipt = (transaction.payments || []).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+
+    const receiptContent = `
+      <div style="font-family: monospace; width: 300px; margin: auto; padding: 15px; font-size: 12px;">
+        <h2 style="text-align: center;">Recibo</h2>
+        <p><strong>Venda:</strong> ${transaction.sale_number}</p>
+        <p><strong>Data:</strong> ${formatDate(transaction.transaction_date)}</p>
+        <p><strong>Operador:</strong> ${transaction.cashier_name}</p>
+        <hr>
+        <h3 style="margin-bottom: 5px;">Itens:</h3>
+        ${itemsHtml}
+        <hr>
+        <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>${formatCurrency(subtotal)}</span></div>
+        ${discountAmount > 0 ? `<div style="display: flex; justify-content: space-between; color: red;"><span>Desconto:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}
+        <hr>
+        <div style="display: flex; justify-content: space-between; font-weight: bold;"><span>TOTAL:</span><span>${formatCurrency(transaction.total_amount)}</span></div>
+        <hr>
+        <h3 style="margin-bottom: 5px;">Pagamentos:</h3>
+        ${paymentsHtml}
+        <div style="display: flex; justify-content: space-between;"><span>Total Pago:</span><span>${formatCurrency(totalPaidReceipt)}</span></div>
+        ${change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold; color: green;"><span>Troco:</span><span>${formatCurrency(change)}</span></div>` : ''}
+        <hr>
+        <p style="text-align: center; margin-top: 10px;">Obrigado!</p>
+      </div>
+    `;
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(receiptContent);
@@ -172,17 +204,18 @@ const Transactions = () => {
     setCart(cart.map(item => item.product_id === productId ? { ...item, quantity: newQuantity } : item));
   };
 
-  const calculateSubtotal = () => cart.reduce((total, item) => total + (item.unit_price * item.quantity), 0);
-  const calculateDiscount = () => calculateSubtotal() * (discountPercent / 100);
-  const calculateTotal = () => calculateSubtotal() - calculateDiscount();
+  // --- CÁLCULOS FINANCEIROS ---
+  const subtotal = cart.reduce((total, item) => total + (item.unit_price * item.quantity), 0);
+  const discountAmount = subtotal * (discountPercent / 100);
+  const totalAmount = subtotal - discountAmount;
   const totalPaid = payments.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
-  const remainingToPay = calculateTotal() - totalPaid;
+  const remainingToPay = totalAmount - totalPaid;
+  const changeDue = Math.max(0, totalPaid - totalAmount); // Troco calculado em tempo real
 
   const handleAddPayment = () => {
     const amount = parseFloat(currentPaymentAmount);
     if (!currentPaymentMethodId) return alert("Selecione uma forma de pagamento.");
     if (!amount || amount <= 0) return alert("Insira um valor de pagamento válido.");
-    if (amount > remainingToPay + 0.01) return alert("O valor do pagamento não pode ser maior que o valor restante.");
 
     const selectedMethod = paymentMethods.find(m => m.id.toString() === currentPaymentMethodId);
     if (!selectedMethod) return alert("Forma de pagamento inválida.");
@@ -190,6 +223,9 @@ const Transactions = () => {
     if (selectedMethod.generates_accounts_receivable) {
       if (!selectedCustomerId || selectedCustomerId === 'none') {
         return alert("Por favor, selecione um cliente para vendas a prazo.");
+      }
+      if (amount > remainingToPay + 0.01) {
+        return alert("O valor do pagamento a prazo não pode ser maior que o valor restante.");
       }
       setCurrentPaymentForInstallments({ payment_method_id: selectedMethod.id, name: selectedMethod.name, amount, type: selectedMethod.type });
       setShowInstallmentModal(true);
@@ -222,12 +258,13 @@ const Transactions = () => {
     setShowNewSale(false);
     setProductSearchTerm('');
     setCurrentProductPage(1);
+    setLastChange(0); // Limpa o troco
     fetchTransactions(1);
   };
 
   const handleFinalizeSale = async () => {
     if (cart.length === 0) return alert('Adicione produtos ao carrinho');
-    if (Math.abs(remainingToPay) > 0.01) return alert("O valor pago não corresponde ao total da venda.");
+    if (remainingToPay > 0.01) return alert("Ainda falta pagar " + formatCurrency(remainingToPay));
 
     const hasReceivablePayment = payments.some(p => {
         const method = paymentMethods.find(m => m.id === p.payment_method_id);
@@ -253,14 +290,21 @@ const Transactions = () => {
       
       const response = await api.post('/transactions', transactionData);
       
-      if (response.data && response.data.transaction) {
-        setLastTransaction(response.data.transaction);
-        setShowReceiptOptions(true);
-      } else {
-        alert("Venda realizada com sucesso!");
-      }
+      // Armazena a transação e o troco para o modal
+      const finalChange = Math.max(0, totalPaid - totalAmount);
+      setLastChange(finalChange);
+      setLastTransaction(response.data.transaction);
+      setShowReceiptOptions(true);
       
-      resetSaleState();
+      // Limpa o estado da venda, mas não fecha o modal principal ainda
+      setCart([]);
+      setDiscountPercent(0);
+      setPayments([]);
+      setCurrentPaymentAmount('');
+      setSelectedCustomerId('none');
+      if (paymentMethods.length > 0) setCurrentPaymentMethodId(paymentMethods[0].id.toString());
+      setProductSearchTerm('');
+      setCurrentProductPage(1);
 
     } catch (error) {
       alert('Erro ao finalizar venda: ' + (error.response?.data?.error || error.message));
@@ -323,11 +367,23 @@ const Transactions = () => {
                 <Separator />
                 <div className="flex-grow space-y-3 my-4 overflow-y-auto">{cart.length === 0 ? (<div className="text-center text-gray-500 pt-10"><ShoppingCart className="w-10 h-10 mx-auto mb-2" /><p>Seu carrinho está vazio.</p></div>) : cart.map((item) => (<Card key={item.product_id}><CardContent className="p-3"><div className="flex justify-between items-start mb-2"><div className="flex-1"><h4 className="font-medium text-sm">{item.product_name}</h4><p className="text-xs text-gray-600">{formatCurrency(item.unit_price)} cada</p></div><Button size="icon" variant="ghost" onClick={() => removeFromCart(item.product_id)} className="text-red-600 hover:text-red-700 h-7 w-7"><Trash2 className="w-4 h-4" /></Button></div><div className="flex items-center justify-between"><div className="flex items-center space-x-2"><Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)} className="h-7 w-7"><Minus className="w-3 h-3" /></Button><span className="w-8 text-center text-sm font-bold">{item.quantity}</span><Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)} className="h-7 w-7"><Plus className="w-3 h-3" /></Button></div><span className="font-semibold text-sm">{formatCurrency(item.unit_price * item.quantity)}</span></div></CardContent></Card>))}</div>
                 <div className="mt-auto">
-                  <Separator className="my-4" /><div className="mb-4"><label className="block text-sm font-medium mb-2">Desconto (%)</label><Input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} /></div>
-                  <div className="space-y-2 mb-4 p-3 bg-white rounded border"><div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(calculateSubtotal())}</span></div>{discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto:</span><span>-{formatCurrency(calculateDiscount())}</span></div>)}<Separator /><div className="flex justify-between font-bold text-lg"><span>Total a Pagar:</span><span>{formatCurrency(calculateTotal())}</span></div><div className="flex justify-between text-sm text-blue-600"><span>Total Pago:</span><span>{formatCurrency(totalPaid)}</span></div><div className="flex justify-between text-sm font-bold text-orange-600"><span>Restante:</span><span>{formatCurrency(remainingToPay)}</span></div></div>
+                  <Separator className="my-4" />
+                  <div className="mb-4"><label className="block text-sm font-medium mb-2">Desconto (%)</label><Input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} /></div>
+                  <div className="space-y-2 mb-4 p-3 bg-white rounded border">
+                    <div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(subtotal)}</span></div>
+                    {discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto:</span><span>-{formatCurrency(discountAmount)}</span></div>)}
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg"><span>Total a Pagar:</span><span>{formatCurrency(totalAmount)}</span></div>
+                    <div className="flex justify-between text-sm text-blue-600"><span>Total Pago:</span><span>{formatCurrency(totalPaid)}</span></div>
+                    {remainingToPay > 0 ? (
+                      <div className="flex justify-between text-sm font-bold text-orange-600"><span>Restante:</span><span>{formatCurrency(remainingToPay)}</span></div>
+                    ) : (
+                      <div className="flex justify-between text-sm font-bold text-green-600"><span>Troco:</span><span>{formatCurrency(changeDue)}</span></div>
+                    )}
+                  </div>
                   <div className="mb-4"><label className="block text-sm font-medium mb-2">Adicionar Pagamento</label><div className="flex items-center space-x-2"><Select value={currentPaymentMethodId} onValueChange={setCurrentPaymentMethodId}><SelectTrigger><SelectValue placeholder="Método" /></SelectTrigger><SelectContent>{paymentMethods.map(method => (<SelectItem key={method.id} value={method.id.toString()}>{method.name}</SelectItem>))}</SelectContent></Select><Input type="number" placeholder="Valor" value={currentPaymentAmount} onChange={(e) => setCurrentPaymentAmount(e.target.value)} /><Button onClick={handleAddPayment}><Plus className="w-4 h-4" /></Button></div></div>
                   <div className="space-y-2 mb-4 max-h-24 overflow-y-auto">{payments.map((p, index) => (<div key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded-md text-sm"><div className="flex items-center">{getPaymentMethodIcon(p.name)}<span className="ml-2 capitalize">{p.name}{p.installments > 1 && ` (${p.installments}x)`}</span></div><div className="flex items-center"><span className="font-semibold">{formatCurrency(p.amount)}</span><Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => handleRemovePayment(index)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div>))}</div>
-                  <div className="space-y-2"><Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || Math.abs(remainingToPay) > 0.01} className="w-full bg-green-600 h-12 text-base"><Calculator className="w-5 h-5 mr-2" />{submitting ? 'Finalizando...' : 'Finalizar Venda'}</Button><Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button></div>
+                  <div className="space-y-2"><Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || remainingToPay > 0.01} className="w-full bg-green-600 h-12 text-base"><Calculator className="w-5 h-5 mr-2" />{submitting ? 'Finalizando...' : 'Finalizar Venda'}</Button><Button variant="outline" onClick={resetSaleState} className="w-full h-12 text-base">Cancelar</Button></div>
                 </div>
               </div>
             </div>
@@ -336,32 +392,23 @@ const Transactions = () => {
       )}
       
       {showInstallmentModal && (
-        <Modal 
-          open={showInstallmentModal} 
-          onClose={() => setShowInstallmentModal(false)} 
-          title={`Definir Parcelas para ${currentPaymentForInstallments?.name}`}
-        >
+        <Modal open={showInstallmentModal} onClose={() => setShowInstallmentModal(false)} title={`Definir Parcelas para ${currentPaymentForInstallments?.name}`}>
           <div className="space-y-4 p-2">
             <p>Valor a parcelar: <strong>{formatCurrency(currentPaymentForInstallments?.amount)}</strong></p>
-            <div>
-              <label htmlFor="installments" className="block text-sm font-medium text-gray-700 mb-1">Número de Parcelas</label>
-              <Input id="installments" type="number" min="1" value={installments} onChange={(e) => setInstallments(Math.max(1, parseInt(e.target.value, 10) || 1))} className="w-full" />
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="ghost" onClick={() => setShowInstallmentModal(false)}>Cancelar</Button>
-              <Button onClick={handleConfirmInstallments}>Confirmar Parcelas</Button>
-            </div>
+            <div><label htmlFor="installments" className="block text-sm font-medium text-gray-700 mb-1">Número de Parcelas</label><Input id="installments" type="number" min="1" value={installments} onChange={(e) => setInstallments(Math.max(1, parseInt(e.target.value, 10) || 1))} className="w-full" /></div>
+            <div className="flex justify-end gap-2 pt-4"><Button variant="ghost" onClick={() => setShowInstallmentModal(false)}>Cancelar</Button><Button onClick={handleConfirmInstallments}>Confirmar Parcelas</Button></div>
           </div>
         </Modal>
       )}
 
       {showReceiptOptions && lastTransaction && (
-        <Modal open={showReceiptOptions} onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} title="Gerar Comprovante">
+        <Modal open={showReceiptOptions} onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); resetSaleState(); }} title="Venda Concluída">
           <ReceiptOptionsModal
             transaction={lastTransaction}
-            onPrint={() => { handlePrintReceipt(lastTransaction); setShowReceiptOptions(false); setLastTransaction(null); }}
-            onPDF={() => { exportToPDF([lastTransaction], dateFilter); setShowReceiptOptions(false); setLastTransaction(null); }}
-            onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }}
+            change={lastChange}
+            onPrint={() => { handlePrintReceipt(lastTransaction, lastChange); setShowReceiptOptions(false); setLastTransaction(null); resetSaleState(); }}
+            onPDF={() => { exportToPDF([lastTransaction], dateFilter); setShowReceiptOptions(false); setLastTransaction(null); resetSaleState(); }}
+            onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); resetSaleState(); }}
           />
         </Modal>
       )}
@@ -390,21 +437,57 @@ const Transactions = () => {
                       <CardContent className="p-0">
                         <div className="p-4 cursor-pointer" onClick={() => toggleTransactionDetails(transaction.id)}>
                           <div className="flex justify-between items-start">
-                            <div><div className="flex items-center space-x-2 mb-1"><Badge variant="outline">Venda #{transaction.sale_number}</Badge><Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge></div><p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p></div>
-                            <div className="flex items-center"><div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}</div></div><ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} /></div>
+                            <div>
+                              <div className="flex items-center space-x-2 mb-1">
+                                <Badge variant="outline">Venda #{transaction.sale_number}</Badge>
+                                <Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge>
+                              </div>
+                              <p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p>
+                            </div>
+                            <div className="flex items-center">
+                              <div className="text-right mr-4">
+                                <div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>
+                                  {formatCurrency(transaction.total_amount)}
+                                </div>
+                                <div className="flex items-center justify-end text-sm text-gray-600 space-x-2">
+                                  {(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}
+                                </div>
+                              </div>
+                              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} />
+                            </div>
                           </div>
                         </div>
                         {expandedTransactionId === transaction.id && (
-                          <div className="border-t mt-0 pt-4 px-4 pb-4">
+                          <div className="border-t mt-0 pt-4 px-4 pb-4 bg-gray-50">
                             {transaction.customer_name && <p className="text-sm text-gray-700 mb-2"><b>Cliente:</b> {transaction.customer_name}</p>}
                             <p className="text-sm font-medium">Itens da Venda:</p>
-                            <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
+                            <div className="space-y-1 text-sm text-gray-700 mb-4">
+                              {(transaction.items || []).map((item, index) => (
+                                <div key={index} className="flex justify-between">
+                                  <span>{item.quantity}x {item.product_name}</span>
+                                  <span>{formatCurrency(item.subtotal)}</span>
+                                </div>
+                              ))}
+                            </div>
                             <p className="text-sm font-medium mb-2">Pagamentos:</p>
-                            <div className="space-y-1 text-sm text-gray-700 mb-3">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
+                            <div className="space-y-1 text-sm text-gray-700 mb-3">
+                              {(transaction.payments || []).map((p, index) => (
+                                <div key={index} className="flex justify-between">
+                                  <span className="capitalize">{p.payment_method_name}</span>
+                                  <span>{formatCurrency(p.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
                             <Separator className="mb-3" />
                             <div className="flex items-center justify-end space-x-2">
-                              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>
-                              {!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}
+                              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(transaction); }}>
+                                <Printer className="w-4 h-4 mr-2" />Imprimir Recibo
+                              </Button>
+                              {!isCancelled && (
+                                <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); handleCancelTransaction(transaction.id); }}>
+                                  <Ban className="w-4 h-4 mr-2" />Cancelar Venda
+                                </Button>
+                              )}
                             </div>
                           </div>
                         )}
@@ -425,3 +508,4 @@ const Transactions = () => {
 };
 
 export default Transactions;
+

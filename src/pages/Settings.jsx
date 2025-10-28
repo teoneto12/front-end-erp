@@ -22,7 +22,7 @@ const Settings = () => {
     const fetchSettings = async () => {
       setLoading(true);
       try {
-        const response = await api.get('/setting-export/PRE_SALE_EXPORT_PATH');
+        const response = await api.get('/settings/PRE_SALE_EXPORT_PATH');
         setExportPath(response.data.value || '');
       } catch (error) {
         console.error("Erro ao buscar configurações:", error);
@@ -42,7 +42,7 @@ const Settings = () => {
 
   const handleSaveExportPath = async () => {
     setSaving(true);
-    const promise = api.put('/setting-export/PRE_SALE_EXPORT_PATH', { value: exportPath });
+    const promise = api.put('/settings/PRE_SALE_EXPORT_PATH', { value: exportPath });
 
     toast.promise(promise, {
       loading: 'Salvando caminho de exportação...',
