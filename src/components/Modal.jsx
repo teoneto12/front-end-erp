@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-const Modal = ({ open, onClose, title, children, className }) => {
+const Modal = ({ open, onClose, title, children, className = '', maxWidth = 'max-w-md' }) => {
   useEffect(() => {
     if (!open) return;
     const handleEsc = (e) => {
@@ -22,30 +22,26 @@ const Modal = ({ open, onClose, title, children, className }) => {
 
   return createPortal(
     <>
+      {/* Fundo escurecido */}
       <div
         className="fixed inset-0 bg-black/50 z-40"
         onClick={onClose}
         aria-hidden="true"
       />
+
+      {/* Container principal */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         role="dialog"
         aria-modal="true"
       >
-        {/* 
-          ▼▼▼ CORREÇÃO DEFINITIVA APLICADA AQUI ▼▼▼
-          - A classe 'max-w-lg' foi REMOVIDA.
-          - Agora, o tamanho do modal é controlado EXCLUSIVAMENTE pela 'className'
-            que é passada a partir da página que o chama (ex: PreSales.jsx).
-          - Se nenhuma className for passada, ele usará 'w-full', ocupando a largura
-            disponível até os limites do padding do container.
-        */}
         <div
-          className={`bg-white rounded-lg shadow-xl w-full ${className || ''}`}
+          className={`bg-white rounded-xl shadow-xl w-full mx-auto ${maxWidth} ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Cabeçalho */}
           <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+            {title && <h3 className="text-lg font-semibold text-gray-800">{title}</h3>}
             <button
               onClick={onClose}
               aria-label="Fechar"
@@ -54,9 +50,9 @@ const Modal = ({ open, onClose, title, children, className }) => {
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="p-6">
-            {children}
-          </div>
+
+          {/* Conteúdo rolável */}
+          <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
         </div>
       </div>
     </>,
