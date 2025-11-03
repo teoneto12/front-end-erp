@@ -1,3 +1,4 @@
+// frontend/src/pages/Transactions.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api.js';
 
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, Ban, FileDown, Banknote, CreditCard, Smartphone, FileText, ChevronDown, User, Repeat, ArrowUpCircle, ArrowDownCircle, DoorClosed, Loader2, Store } from 'lucide-react';
+import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, Ban, FileDown, Banknote, CreditCard, Smartphone, FileText, ChevronDown, User, Repeat, ArrowUpCircle, ArrowDownCircle, DoorClosed, Loader2, Store, AlertTriangle, Gift, Tag, XCircle } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import Modal from '../components/Modal';
 import '../App.css';
@@ -17,9 +18,12 @@ import '../App.css';
 // Importações adicionais
 import Dashboard from '../components/Dashboard'; 
 import { exportToPDF } from '../lib/pdfGenerator.js';
+import DiscountModal from '../components/DiscountModal';
+import PaymentModal from '../components/PaymentModal';
+import InstallmentModal from '../components/InstallmentModal';
 
 // ==================================================================
-// COMPONENTES DE MODAIS (Não precisam de alteração)
+// COMPONENTES DE MODAIS AUXILIARES (sem alterações)
 // ==================================================================
 const ReceiptOptionsModal = ({ transaction, change, onPrint, onPDF, onClose }) => {
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
@@ -147,20 +151,22 @@ const CloseCashierModal = ({ onConfirm, summary, onClose, isClosing, paymentMeth
 };
 
 // ==================================================================
-// COMPONENTE PRINCIPAL (Transactions) - O GERENCIADOR DE CAIXA
+// COMPONENTE PRINCIPAL (Transactions)
 // ==================================================================
 const Transactions = () => {
+  // --- ESTADOS DE CONTROLE DE FLUXO E MODAIS ---
+  const [view, setView] = useState('dashboard');
+  const [modal, setModal] = useState(null);
+  
   // --- ESTADOS DE CONTROLE DE CAIXA ---
   const [activeSession, setActiveSession] = useState(null);
   const [isCashierOpen, setIsCashierOpen] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [showOpenModal, setShowOpenModal] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
   const [isOpening, setIsOpening] = useState(false);
-  const [showMovementModal, setShowMovementModal] = useState(null);
-  const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeSummary, setCloseSummary] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [isOldSession, setIsOldSession] = useState(false);
 
   // --- ESTADOS DO DASHBOARD E HISTÓRICO ---
   const [transactions, setTransactions] = useState([]);
@@ -171,24 +177,20 @@ const Transactions = () => {
   const [loading, setLoading] = useState(true);
   const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
 
-  // --- ESTADOS DO PDV (MODAL DE VENDA) ---
-  const [showPDV, setShowPDV] = useState(false);
+  // --- ESTADOS DA VENDA (PDV) ---
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [currentProductPage, setCurrentProductPage] = useState(1);
   const [cart, setCart] = useState([]);
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discount, setDiscount] = useState({ type: 'percent', value: 0 });
   const [payments, setPayments] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
-  const [currentPaymentMethodId, setCurrentPaymentMethodId] = useState('');
-  const [currentPaymentAmount, setCurrentPaymentAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('none');
-  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
-  const [currentPaymentForInstallments, setCurrentPaymentForInstallments] = useState(null);
-  const [installments, setInstallments] = useState(1);
+  const [customerCredit, setCustomerCredit] = useState(0);
+  const [installmentPayment, setInstallmentPayment] = useState(null);
   
   // --- ESTADOS DO MODAL DE RECIBO ---
   const [showReceiptOptions, setShowReceiptOptions] = useState(false);
@@ -202,12 +204,15 @@ const Transactions = () => {
       const { data } = await api.get('/cashier-sessions/status');
       setIsCashierOpen(data.isOpen);
       setActiveSession(data.session);
-    } catch (error) {
-      console.error("Erro ao verificar sessão do caixa:", error);
-      setIsCashierOpen(false);
-    } finally {
-      setCheckingSession(false);
-    }
+      if (data.isOpen && data.session?.opening_time) {
+        const sessionDate = new Date(data.session.opening_time).toDateString();
+        const todayDate = new Date().toDateString();
+        setIsOldSession(sessionDate !== todayDate);
+      } else {
+        setIsOldSession(false);
+      }
+    } catch (error) { console.error("Erro ao verificar sessão do caixa:", error); setIsCashierOpen(false); setIsOldSession(false); } 
+    finally { setCheckingSession(false); }
   }, []);
 
   const handleOpenCashier = async () => {
@@ -216,57 +221,40 @@ const Transactions = () => {
       const { data } = await api.post('/cashier-sessions/open', { opening_balance: openingBalance });
       setActiveSession(data.session);
       setIsCashierOpen(true);
-      setShowOpenModal(false); // Fecha o modal de abertura
-      setShowPDV(true); // Abre o PDV automaticamente
-    } catch (error) {
-      alert(`Erro ao abrir caixa: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setIsOpening(false);
-    }
+      setIsOldSession(false);
+      setModal(null);
+      setView('pdv');
+    } catch (error) { alert(`Erro ao abrir caixa: ${error.response?.data?.error || error.message}`); } 
+    finally { setIsOpening(false); }
   };
 
   const handleCreateMovement = async ({ amount, reason }) => {
     try {
-      await api.post('/cash-movements', {
-        session_id: activeSession.id,
-        type: showMovementModal,
-        amount,
-        reason
-      });
-      alert(`Movimentação (${showMovementModal}) registrada com sucesso!`);
-      setShowMovementModal(null);
-    } catch (error) {
-      alert(`Erro ao registrar movimentação: ${error.response?.data?.error || error.message}`);
-    }
+      await api.post('/cash-movements', { session_id: activeSession.id, type: modal, amount, reason });
+      alert(`Movimentação (${modal}) registrada com sucesso!`);
+      setModal(null);
+    } catch (error) { alert(`Erro ao registrar movimentação: ${error.response?.data?.error || error.message}`); }
   };
 
   const handleCloseCashier = async (informedTotals) => {
     setIsClosing(true);
     try {
-      const numericTotals = Object.entries(informedTotals).reduce((acc, [key, value]) => {
-        acc[key] = parseFloat(value) || 0;
-        return acc;
-      }, {});
+      const numericTotals = Object.entries(informedTotals).reduce((acc, [key, value]) => { acc[key] = parseFloat(value) || 0; return acc; }, {});
       const { data } = await api.put('/cashier-sessions/close', { informed_totals: numericTotals });
       setCloseSummary(data.summary);
-    } catch (error) {
-      alert(`Erro ao fechar caixa: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setIsClosing(false);
-    }
+    } catch (error) { alert(`Erro ao fechar caixa: ${error.response?.data?.error || error.message}`); } 
+    finally { setIsClosing(false); }
   };
 
   const handleFrenteDeLojaClick = () => {
     if (isCashierOpen) {
-      setShowPDV(true);
+      setView('pdv');
     } else {
-      setShowOpenModal(true);
+      setModal('open_cashier');
     }
   };
   
-  const logoutAndReset = () => {
-    window.location.reload();
-  };
+  const logoutAndReset = () => window.location.reload();
 
   // --- FUNÇÕES DE BUSCA (API) ---
   const fetchTransactions = useCallback(async (page = 1, search = '', dates = {}) => {
@@ -276,7 +264,8 @@ const Transactions = () => {
       const response = await api.get('/transactions', { params });
       setTransactions(response.data.transactions || []);
       setTransactionPagination(response.data.pagination || null);
-    } catch (error) { console.error('Erro ao carregar transações:', error); setTransactions([]); } finally { setLoading(false); }
+    } catch (error) { console.error('Erro ao carregar transações:', error); setTransactions([]); } 
+    finally { setLoading(false); }
   }, []);
 
   const fetchProducts = useCallback(async (page = 1, search = '') => {
@@ -309,20 +298,33 @@ const Transactions = () => {
   }, [currentTransactionPage, transactionSearchTerm, dateFilter, checkSessionStatus, fetchTransactions, fetchPaymentMethods]);
 
   useEffect(() => {
-    if (showPDV) {
-      fetchProducts(currentProductPage, productSearchTerm);
+    if (view === 'pdv') {
+      fetchProducts(currentProductPage, productSearchTerm
+
+
+        , productSearchTerm);
       fetchCustomers();
     }
-  }, [showPDV, currentProductPage, productSearchTerm, fetchProducts, fetchCustomers]);
+  }, [view, currentProductPage, productSearchTerm, fetchProducts, fetchCustomers]);
+
+  useEffect(() => {
+    const fetchCustomerBalance = async () => {
+      if (selectedCustomerId && selectedCustomerId !== 'none') {
+        try {
+          const { data } = await api.get(`/customers/${selectedCustomerId}/balance`);
+          setCustomerCredit(data.total_balance || 0);
+        } catch (error) { console.error("Erro ao buscar saldo do cliente:", error); setCustomerCredit(0); }
+      } else {
+        setCustomerCredit(0);
+      }
+    };
+    fetchCustomerBalance();
+  }, [selectedCustomerId]);
 
   // --- FUNÇÕES DE LÓGICA DO PDV ---
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
   const formatDate = (dateString) => new Date(dateString).toLocaleString('pt-BR');
   const toggleTransactionDetails = (id) => setExpandedTransactionId(prevId => (prevId === id ? null : id));
-
-  const handlePrintReceipt = (transaction, change = 0) => {
-    // ... (código da função de impressão permanece o mesmo)
-  };
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.product_id === product.id);
@@ -338,7 +340,6 @@ const Transactions = () => {
   };
 
   const removeFromCart = (productId) => setCart(cart.filter(item => item.product_id !== productId));
-
   const updateCartQuantity = (productId, newQuantity) => {
     if (newQuantity <= 0) { removeFromCart(productId); return; }
     const item = cart.find(item => item.product_id === productId);
@@ -347,84 +348,82 @@ const Transactions = () => {
   };
 
   const subtotal = cart.reduce((total, item) => total + (item.unit_price * item.quantity), 0);
-  const discountAmount = subtotal * (discountPercent / 100);
+  const discountAmount = discount.type === 'percent' ? subtotal * (discount.value / 100) : Math.min(discount.value, subtotal);
   const totalAmount = subtotal - discountAmount;
-  const totalPaid = payments.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
-  const remainingToPay = totalAmount - totalPaid;
-  const changeDue = Math.max(0, totalPaid - totalAmount);
 
-  const handleAddPayment = () => {
-    const amount = parseFloat(currentPaymentAmount);
-    if (!currentPaymentMethodId) return alert("Selecione uma forma de pagamento.");
-    if (!amount || amount <= 0) return alert("Insira um valor de pagamento válido.");
-    const selectedMethod = paymentMethods.find(m => m.id.toString() === currentPaymentMethodId);
-    if (!selectedMethod) return alert("Forma de pagamento inválida.");
-    if (selectedMethod.type === 'credito_loja') {
-      if (!selectedCustomerId || selectedCustomerId === 'none') return alert("Por favor, selecione um cliente para vendas em Crédito Loja.");
-      if (amount > remainingToPay + 0.01) return alert("O valor do pagamento em Crédito Loja não pode ser maior que o valor restante.");
-      setCurrentPaymentForInstallments({ payment_method_id: selectedMethod.id, name: selectedMethod.name, amount, type: selectedMethod.type });
-      setShowInstallmentModal(true);
-    } else {
-      setPayments([...payments, { payment_method_id: selectedMethod.id, name: selectedMethod.name, amount, type: selectedMethod.type }]);
-      setCurrentPaymentAmount('');
-    }
+  const handleApplyDiscount = (newDiscount) => {
+    setDiscount(newDiscount);
+    setModal(null);
   };
-
-  const handleConfirmInstallments = () => {
-    if (!currentPaymentForInstallments || !installments || installments < 1) return alert("Número de parcelas inválido.");
-    setPayments([...payments, { ...currentPaymentForInstallments, installments }]);
-    setShowInstallmentModal(false);
-    setCurrentPaymentForInstallments(null);
-    setInstallments(1);
-    setCurrentPaymentAmount('');
-  };
-
-  const handleRemovePayment = (indexToRemove) => setPayments(payments.filter((_, index) => index !== indexToRemove));
 
   const resetPDVFields = () => {
-    setCart([]); setDiscountPercent(0); setPayments([]); setCurrentPaymentAmount('');
-    setSelectedCustomerId('none');
-    const pdvMethods = paymentMethods.filter(m => m.show_in_pdv);
-    if (pdvMethods.length > 0) setCurrentPaymentMethodId(pdvMethods[0].id.toString());
+    setCart([]); setDiscount({ type: 'percent', value: 0 }); setPayments([]);
+    setSelectedCustomerId('none'); setCustomerCredit(0);
     setProductSearchTerm(''); setCurrentProductPage(1); setLastChange(0);
+    setInstallmentPayment(null);
   };
-
+  
   const handleFinalizeSale = async () => {
-    if (cart.length === 0) return alert('Adicione produtos ao carrinho');
-    if (remainingToPay > 0.01) return alert("Ainda falta pagar " + formatCurrency(remainingToPay));
-    const hasReceivablePayment = payments.some(p => {
-        const method = paymentMethods.find(m => m.id === p.payment_method_id);
-        return method && method.type === 'credito_loja';
-    });
-    if (hasReceivablePayment && (!selectedCustomerId || selectedCustomerId === 'none')) return alert("Uma forma de pagamento em Crédito Loja foi usada, mas nenhum cliente foi selecionado.");
+    const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+    if (totalPaid < totalAmount - 0.01) {
+      alert("O valor pago é menor que o total da venda. Finalize o pagamento.");
+      return;
+    }
+
+    const hasInstallmentPayment = payments.some(p => p.type === 'credito_loja');
+    if (hasInstallmentPayment && (!selectedCustomerId || selectedCustomerId === 'none')) {
+        alert("Um cliente deve ser selecionado para finalizar uma venda em crediário.");
+        return;
+    }
+
     setSubmitting(true);
     try {
       const transactionData = {
         customer_id: selectedCustomerId === 'none' ? null : parseInt(selectedCustomerId, 10),
         items: cart.map(item => ({ product_id: item.product_id, quantity: item.quantity, unit_price: item.unit_price })),
         payments: payments.map(p => ({ payment_method_id: p.payment_method_id, amount: p.amount, installments: p.installments || 1 })),
-        discount_percent: discountPercent,
+        discount: discount,
       };
       const response = await api.post('/transactions', transactionData);
       const finalChange = Math.max(0, totalPaid - totalAmount);
       setLastChange(finalChange);
       setLastTransaction(response.data.transaction);
-      setShowReceiptOptions(true);
+      
       resetPDVFields();
+      setModal(null);
+      setShowReceiptOptions(true);
       fetchTransactions(1);
+      checkSessionStatus();
     } catch (error) {
       alert('Erro ao finalizar venda: ' + (error.response?.data?.error || error.message));
     } finally {
       setSubmitting(false);
     }
   };
-  
+
+  const handleSelectInstallmentPayment = (paymentData) => {
+    setInstallmentPayment(paymentData);
+    setModal('installment');
+  };
+
+  const handleConfirmInstallment = ({ installments }) => {
+    if (!installmentPayment) return;
+    setPayments(prev => [...prev, {
+      ...installmentPayment.method,
+      amount: installmentPayment.amount,
+      installments: installments
+    }]);
+    setInstallmentPayment(null);
+    setModal('payment');
+  };
+
   const getPaymentMethodIcon = (methodName) => {
     const name = methodName?.toLowerCase() || '';
     if (name.includes('dinheiro')) return <Banknote className="w-4 h-4" />;
     if (name.includes('débito')) return <CreditCard className="w-4 h-4" />;
     if (name.includes('crédito') || name.includes('crediário')) return <CreditCard className="w-4 h-4" />;
     if (name.includes('pix')) return <Smartphone className="w-4 h-4" />;
+    if (name.includes('voucher')) return <Gift className="w-4 h-4 text-blue-600" />;
     return <Banknote className="w-4 h-4" />;
   };
 
@@ -433,14 +432,177 @@ const Transactions = () => {
     return <div className="flex items-center justify-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-gray-400" /></div>;
   }
 
+  // RENDERIZAÇÃO DO PDV
+  if (view === 'pdv') {
+    return (
+      <div className="fixed inset-0 bg-white z-50 p-4 flex flex-col">
+        <header className="flex justify-between items-center pb-4 border-b flex-shrink-0">
+          <h2 className="text-2xl font-bold">Frente de Loja</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setModal('SUPRIMENTO')}><ArrowUpCircle className="w-4 h-4 mr-2" />Suprimento</Button>
+            <Button variant="outline" onClick={() => setModal('SANGRIA')} className="text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"><ArrowDownCircle className="w-4 h-4 mr-2" />Sangria</Button>
+            <Button variant="destructive" onClick={() => setModal('close_cashier')}><DoorClosed className="w-4 h-4 mr-2" />Fechar Caixa</Button>
+            <Button variant="ghost" size="icon" onClick={() => setView('dashboard')}><X className="w-5 h-5" /></Button>
+          </div>
+        </header>
+        
+        <main className="flex-grow flex overflow-hidden pt-4">
+          <div className="flex-1 p-4 border-r flex flex-col">
+            <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar produtos..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="pl-10" /></div></div>
+            <div className="flex-grow overflow-y-auto mb-4 border rounded-lg">
+              <Table><TableHeader className="sticky top-0 bg-gray-50 z-10"><TableRow><TableHead>Produto</TableHead><TableHead className="text-center">Estoque</TableHead><TableHead className="text-right">Preço</TableHead><TableHead className="text-center">Ação</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {products.map((product) => (
+                    <TableRow key={product.id}><TableCell><div>{product.name}</div><div className="text-xs text-gray-500">SKU: {product.sku}</div></TableCell><TableCell className="text-center"><Badge variant={product.stock_quantity > 0 ? "secondary" : "destructive"}>{product.stock_quantity}</Badge></TableCell><TableCell className="text-right font-semibold">{formatCurrency(product.price)}</TableCell><TableCell className="text-center"><Button size="sm" variant="outline" onClick={() => addToCart(product)} disabled={product.stock_quantity <= 0}><Plus className="w-4 h-4" /></Button></TableCell></TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName="produtos" />
+          </div>
+
+          <div className="w-[750px] flex-shrink-0 bg-gray-50 p-4 flex flex-col">
+            <div className="flex-shrink-0">
+              <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Indicar Cliente (para Crediário/Voucher)</label>
+                <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                  <SelectTrigger><SelectValue placeholder="Selecione um cliente..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum (Consumidor Final)</SelectItem>
+                    {customers.map(customer => (<SelectItem key={customer.id} value={customer.id.toString()}>{customer.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <Button variant="outline" onClick={() => setModal('discount')}><Tag className="w-4 h-4 mr-2" />Aplicar Desconto</Button>
+                <Button variant="outline" onClick={() => setCart([])}><Trash2 className="w-4 h-4 mr-2" />Limpar Itens</Button>
+                <Button variant="outline" onClick={resetPDVFields}><XCircle className="w-4 h-4 mr-2" />Cancelar Venda</Button>
+              </div>
+              <Separator />
+            </div>
+
+            <div className="flex-grow my-4 overflow-y-auto space-y-3 pr-2">
+              {cart.length === 0 ? (
+                <div className="text-center text-gray-500 pt-10 flex flex-col items-center justify-center h-full">
+                  <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg">Seu carrinho está vazio.</p>
+                  <p className="text-sm text-gray-400">Adicione produtos da lista à esquerda.</p>
+                </div>
+              ) : cart.map((item) => (
+                <Card key={item.product_id}>
+                  <CardContent className="p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1"><h4 className="font-medium">{item.product_name}</h4><p className="text-xs text-gray-600">{formatCurrency(item.unit_price)} cada</p></div>
+                      <Button size="icon" variant="ghost" onClick={() => removeFromCart(item.product_id)} className="text-red-600 hover:text-red-700 h-7 w-7"><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)} className="h-7 w-7"><Minus className="w-3 h-3" /></Button>
+                        <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
+                        <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)} className="h-7 w-7"><Plus className="w-3 h-3" /></Button>
+                      </div>
+                      <span className="font-semibold text-lg">{formatCurrency(item.unit_price * item.quantity)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="flex-shrink-0 mt-auto">
+              <Separator className="mb-4" />
+              <div className="space-y-2 mb-4 p-4 bg-white rounded border">
+                <div className="flex justify-between text-lg"><span>Subtotal:</span><span>{formatCurrency(subtotal)}</span></div>
+                {discountAmount > 0 && (<div className="flex justify-between text-lg text-red-600"><span>Desconto:</span><span>-{formatCurrency(discountAmount)}</span></div>)}
+                <Separator />
+                <div className="flex justify-between font-bold text-3xl"><span>TOTAL:</span><span>{formatCurrency(totalAmount)}</span></div>
+              </div>
+              <Button onClick={() => setModal('payment')} disabled={cart.length === 0} className="w-full bg-green-600 h-20 text-2xl">
+                <Calculator className="w-8 h-8 mr-4" />
+                PAGAMENTO
+              </Button>
+            </div>
+          </div>
+        </main>
+
+        {/* Modais da tela do PDV */}
+        {(modal === 'SUPRIMENTO' || modal === 'SANGRIA') && (
+          <Modal open={true} onClose={() => setModal(null)} title={`Registrar ${modal === 'SANGRIA' ? 'Sangria' : 'Suprimento'}`} maxWidth="max-w-md">
+            <CashMovementModal type={modal} onConfirm={handleCreateMovement} onCancel={() => setModal(null)} />
+          </Modal>
+        )}
+        {modal === 'close_cashier' && (
+          <Modal open={true} onClose={() => { if (closeSummary) { logoutAndReset(); } else { setModal(null); } }} maxWidth="max-w-lg">
+            <CloseCashierModal summary={closeSummary} onConfirm={handleCloseCashier} onClose={logoutAndReset} isClosing={isClosing} paymentMethods={paymentMethods} />
+          </Modal>
+        )}
+        {modal === 'discount' && (
+          <Modal open={true} onClose={() => setModal(null)} maxWidth="max-w-md">
+            <DiscountModal subtotal={subtotal} currentDiscount={discount} onApply={handleApplyDiscount} onClose={() => setModal(null)} />
+          </Modal>
+        )}
+        {modal === 'payment' && (
+          <Modal open={true} onClose={() => setModal(null)} maxWidth="max-w-2xl">
+            <PaymentModal 
+              totalAmount={totalAmount}
+              payments={payments}
+              setPayments={setPayments}
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              customerCredit={customerCredit}
+              setCustomerCredit={setCustomerCredit}
+              paymentMethods={paymentMethods}
+              onFinalize={handleFinalizeSale}
+              submitting={submitting}
+              onSelectInstallmentPayment={handleSelectInstallmentPayment}
+            />
+          </Modal>
+        )}
+        {modal === 'installment' && (
+          <Modal open={true} onClose={() => setModal('payment')} maxWidth="max-w-md">
+            <InstallmentModal
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onConfirm={handleConfirmInstallment}
+              onClose={() => setModal('payment')}
+              paymentAmount={installmentPayment?.amount || 0}
+            />
+          </Modal>
+        )}
+        {showReceiptOptions && lastTransaction && (
+          <Modal open={true} onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} title="Venda Concluída" maxWidth="max-w-md">
+            <ReceiptOptionsModal 
+              transaction={lastTransaction} 
+              change={lastChange} 
+              onPrint={() => { /* Lógica de impressão aqui */ }} 
+              onPDF={() => { exportToPDF([lastTransaction]); setShowReceiptOptions(false); setLastTransaction(null); }} 
+              onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} 
+            />
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  // RENDERIZAÇÃO DO DASHBOARD (TELA PRINCIPAL)
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      {/* CABEÇALHO PRINCIPAL COM AÇÕES E BOTÃO PARA ABRIR O PDV */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Caixa</h1>
           {isCashierOpen ? (
-            <p className="text-gray-600">Sessão iniciada por <strong>{activeSession?.user_name || 'Usuário'}</strong>. Saldo de abertura: {formatCurrency(activeSession?.opening_balance)}</p>
+            <div className="text-gray-600">
+              <p>Sessão iniciada por <strong>{activeSession?.user_name || 'Usuário'}</strong>. Abertura: {formatCurrency(activeSession?.opening_balance)}</p>
+              {isOldSession && (
+                <div className="mt-2 flex items-center p-2 rounded-md bg-red-100 border border-red-300 text-red-800 animate-pulse">
+                  <AlertTriangle className="w-5 h-5 mr-2" />
+                  <span className="font-bold">ATENÇÃO:</span>
+                  <span className="ml-1">Este caixa foi aberto em {new Date(activeSession.opening_time).toLocaleDateString('pt-BR')}. É necessário fechá-lo.</span>
+                </div>
+              )}
+            </div>
           ) : (
             <p className="text-gray-600">O caixa está fechado. Clique em "Frente de Loja" para iniciar uma nova sessão.</p>
           )}
@@ -451,207 +613,18 @@ const Transactions = () => {
         </Button>
       </div>
 
-      {/* MODAL DO PDV (FRENTE DE LOJA) */}
-      {showPDV && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-[95vw] h-[90vh] overflow-hidden flex flex-col">
-            <header className="flex justify-between items-center p-3 border-b">
-                <h2 className="text-xl font-bold">Frente de Loja</h2>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={() => setShowMovementModal('SUPRIMENTO')}><ArrowUpCircle className="w-4 h-4 mr-2" />Suprimento</Button>
-                    <Button variant="outline" onClick={() => setShowMovementModal('SANGRIA')} className="text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"><ArrowDownCircle className="w-4 h-4 mr-2" />Sangria</Button>
-                    <Button variant="destructive" onClick={() => setShowCloseModal(true)}><DoorClosed className="w-4 h-4 mr-2" />Fechar Caixa</Button>
-                    <Button variant="ghost" size="icon" onClick={() => setShowPDV(false)}><X className="w-5 h-5" /></Button>
-                </div>
-            </header>
-            
-            <main className="flex-grow flex overflow-hidden">
-              <div className="flex-1 p-4 border-r flex flex-col">
-                <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar produtos..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="pl-10" /></div></div>
-                <div className="flex-grow overflow-y-auto mb-4 border rounded-lg">
-                  <Table><TableHeader className="sticky top-0 bg-gray-50 z-10"><TableRow><TableHead>Produto</TableHead><TableHead className="text-center">Estoque</TableHead><TableHead className="text-right">Preço</TableHead><TableHead className="text-center">Ação</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {products.map((product) => (
-                        <TableRow key={product.id}><TableCell><div>{product.name}</div><div className="text-xs text-gray-500">SKU: {product.sku}</div></TableCell><TableCell className="text-center"><Badge variant={product.stock_quantity > 0 ? "secondary" : "destructive"}>{product.stock_quantity}</Badge></TableCell><TableCell className="text-right font-semibold">{formatCurrency(product.price)}</TableCell><TableCell className="text-center"><Button size="sm" variant="outline" onClick={() => addToCart(product)} disabled={product.stock_quantity <= 0}><Plus className="w-4 h-4" /></Button></TableCell></TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <Pagination pagination={productPagination} onPageChange={setCurrentProductPage} itemName="produtos" />
-              </div>
-
-              <div className="w-[450px] bg-gray-50 p-4 flex flex-col">
-                <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-1 text-gray-700">Cliente</label>
-                  <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}><SelectTrigger><SelectValue placeholder="Selecione um cliente (opcional)" /></SelectTrigger><SelectContent><SelectItem value="none">Nenhum (Consumidor Final)</SelectItem>{customers.map(customer => (<SelectItem key={customer.id} value={customer.id.toString()}>{customer.name}</SelectItem>))}</SelectContent></Select>
-                </div>
-                <Separator />
-                <div className="flex-grow space-y-3 my-4 overflow-y-auto">
-                  {cart.length === 0 ? (
-                    <div className="text-center text-gray-500 pt-10">
-                      <ShoppingCart className="w-10 h-10 mx-auto mb-2" />
-                      <p>Seu carrinho está vazio.</p>
-                    </div>
-                  ) : cart.map((item) => (
-                    <Card key={item.product_id}>
-                      <CardContent className="p-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-sm">{item.product_name}</h4>
-                            <p className="text-xs text-gray-600">{formatCurrency(item.unit_price)} cada</p>
-                          </div>
-                          <Button size="icon" variant="ghost" onClick={() => removeFromCart(item.product_id)} className="text-red-600 hover:text-red-700 h-7 w-7">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)} className="h-7 w-7">
-                              <Minus className="w-3 h-3" />
-                            </Button>
-                            <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
-                            <Button size="icon" variant="outline" onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)} className="h-7 w-7">
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                          </div>
-                          <span className="font-semibold text-sm">{formatCurrency(item.unit_price * item.quantity)}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                <div className="mt-auto">
-                  <Separator className="my-4" />
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Desconto (%)</label>
-                    <Input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="space-y-2 mb-4 p-3 bg-gray-100 rounded border">
-                    <div className="flex justify-between text-sm"><span>Subtotal:</span><span>{formatCurrency(subtotal)}</span></div>
-                    {discountPercent > 0 && (<div className="flex justify-between text-sm text-red-600"><span>Desconto:</span><span>-{formatCurrency(discountAmount)}</span></div>)}
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg"><span>Total a Pagar:</span><span>{formatCurrency(totalAmount)}</span></div>
-                    <div className="flex justify-between text-sm text-blue-600"><span>Total Pago:</span><span>{formatCurrency(totalPaid)}</span></div>
-                    {remainingToPay > 0 ? (
-                      <div className="flex justify-between text-sm font-bold text-orange-600"><span>Restante:</span><span>{formatCurrency(remainingToPay)}</span></div>
-                    ) : (
-                      <div className="flex justify-between text-sm font-bold text-green-600"><span>Troco:</span><span>{formatCurrency(changeDue)}</span></div>
-                    )}
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Adicionar Pagamento</label>
-                    <div className="flex items-center space-x-2">
-                      <Select value={currentPaymentMethodId} onValueChange={setCurrentPaymentMethodId}>
-                        <SelectTrigger className="flex-1 w-full"><SelectValue placeholder="Método" /></SelectTrigger>
-                        <SelectContent>{paymentMethods.filter(m => m.show_in_pdv).map(method => (<SelectItem key={method.id} value={method.id.toString()}>{method.name}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <Input className="w-28 text-right" type="number" placeholder="Valor" value={currentPaymentAmount} onChange={(e) => setCurrentPaymentAmount(e.target.value)} />
-                      <Button onClick={handleAddPayment}><Plus className="w-4 h-4" /></Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2 mb-4 max-h-24 overflow-y-auto">
-                    {payments.map((p, index) => (
-                      <div key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded-md text-sm">
-                        <div className="flex items-center">
-                          {getPaymentMethodIcon(p.name)}
-                          <span className="ml-2 capitalize">{p.name}{p.installments > 1 && ` (${p.installments}x)`}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <span className="font-semibold">{formatCurrency(p.amount)}</span>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={() => handleRemovePayment(index)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    <Button onClick={handleFinalizeSale} disabled={submitting || cart.length === 0 || remainingToPay > 0.01} className="w-full bg-green-600 h-12 text-base">
-                      <Calculator className="w-5 h-5 mr-2" />
-                      {submitting ? 'Finalizando...' : 'Finalizar Venda'}
-                    </Button>
-                    <Button variant="outline" onClick={resetPDVFields} className="w-full h-12 text-base">Cancelar</Button>
-                  </div>
-                </div>
-              </div>
-            </main>
-          </div>
-        </div>
-      )}
-
-      {/* MODAIS GLOBAIS */}
-      {showOpenModal && (
-        <Modal open={showOpenModal} onClose={() => setShowOpenModal(false)} title="Abrir Caixa" maxWidth="max-w-md">
+      {modal === 'open_cashier' && (
+        <Modal open={true} onClose={() => setModal(null)} title="Abrir Caixa" maxWidth="max-w-md">
           <OpenCashierModal onOpen={handleOpenCashier} openingBalance={openingBalance} setOpeningBalance={setOpeningBalance} isOpening={isOpening} />
         </Modal>
       )}
 
-      {showInstallmentModal && (
-        <Modal open={showInstallmentModal} onClose={() => setShowInstallmentModal(false)} title={`Definir Parcelas para ${currentPaymentForInstallments?.name}`} maxWidth="max-w-md">
-          <div className="space-y-4 p-2">
-            <p>Valor a parcelar: <strong>{formatCurrency(currentPaymentForInstallments?.amount)}</strong></p>
-            <div>
-              <label htmlFor="installments" className="block text-sm font-medium text-gray-700 mb-1">Número de Parcelas</label>
-              <Input id="installments" type="number" min="1" value={installments} onChange={(e) => setInstallments(Math.max(1, parseInt(e.target.value, 10) || 1))} className="w-full" />
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="ghost" onClick={() => setShowInstallmentModal(false)}>Cancelar</Button>
-              <Button onClick={handleConfirmInstallments}>Confirmar Parcelas</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {showReceiptOptions && lastTransaction && (
-        <Modal open={showReceiptOptions} onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} title="Venda Concluída" maxWidth="max-w-md">
-          <ReceiptOptionsModal
-            transaction={lastTransaction}
-            change={lastChange}
-            onPrint={() => { handlePrintReceipt(lastTransaction, lastChange); setShowReceiptOptions(false); setLastTransaction(null); }}
-            onPDF={() => { exportToPDF([lastTransaction]); setShowReceiptOptions(false); setLastTransaction(null); }}
-            onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }}
-          />
-        </Modal>
-      )}
-
-      {/* DEPOIS (Correto) */}
-      {showMovementModal && (
-        <Modal open={!!showMovementModal} onClose={() => setShowMovementModal(null)} title={`Registrar ${showMovementModal === 'SANGRIA' ? 'Sangria' : 'Suprimento'}`} maxWidth="max-w-md">
-          <CashMovementModal type={showMovementModal} onConfirm={handleCreateMovement} onCancel={() => setShowMovementModal(null)} />
-        </Modal>
-      )}
-
-
-      {/* DEPOIS (Correto) */}
-      {showCloseModal && (
-        <Modal open={showCloseModal} onClose={() => {
-          if (closeSummary) { logoutAndReset(); }
-          else { setShowCloseModal(false); }
-        }}
-        maxWidth="max-w-lg" 
-        >
-          <CloseCashierModal 
-            summary={closeSummary} 
-            onConfirm={handleCloseCashier} 
-            onClose={logoutAndReset}
-            isClosing={isClosing}
-            paymentMethods={paymentMethods}
-          />
-        </Modal>
-      )}
-
-
-      {/* Conteúdo Principal: Dashboard e Histórico de Vendas */}
       <div className="flex-grow flex flex-col gap-6">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="w-10 h-10 animate-spin text-gray-400" />
-          </div>
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-10 h-10 animate-spin text-gray-400" /></div>
         ) : (
           <>
             <Dashboard transactions={transactions} />
-            
             <Card>
               <CardHeader>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -681,10 +654,7 @@ const Transactions = () => {
                           <div className="p-4 cursor-pointer" onClick={() => toggleTransactionDetails(transaction.id)}>
                             <div className="flex justify-between items-start">
                               <div>
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <Badge variant="outline">Venda #{transaction.sale_number}</Badge>
-                                  <Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge>
-                                </div>
+                                <div className="flex items-center space-x-2 mb-1"><Badge variant="outline">Venda #{transaction.sale_number}</Badge><Badge variant={isCancelled ? 'destructive' : 'secondary'}>{transaction.status}</Badge></div>
                                 <p className="text-sm text-gray-600">{formatDate(transaction.transaction_date)} • {transaction.cashier_name}</p>
                                 <div className="flex items-center space-x-3 mt-2 text-xs text-gray-500">
                                   {transaction.customer_name && (<div className="flex items-center"><User className="w-3 h-3 mr-1" /><span>{transaction.customer_name}</span></div>)}
@@ -693,12 +663,7 @@ const Transactions = () => {
                                 </div>
                               </div>
                               <div className="flex items-center">
-                                <div className="text-right mr-4">
-                                  <div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div>
-                                  <div className="flex items-center justify-end text-sm text-gray-600 space-x-2">
-                                    {(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}
-                                  </div>
-                                </div>
+                                <div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.name)}</div>)}</div></div>
                                 <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
@@ -706,21 +671,13 @@ const Transactions = () => {
                           {expandedTransactionId === transaction.id && (
                             <div className="border-t mt-0 pt-4 px-4 pb-4 bg-gray-50">
                               <p className="text-sm font-medium">Itens da Venda:</p>
-                              <div className="space-y-1 text-sm text-gray-700 mb-4">
-                                {(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}
-                              </div>
+                              <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
                               <p className="text-sm font-medium mb-2">Pagamentos:</p>
-                              <div className="space-y-1 text-sm text-gray-700 mb-3">
-                                {(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}{p.installments > 1 ? ` (${p.installments}x)`: ''}</span><span>{formatCurrency(p.amount)}</span></div>))}
-                              </div>
+                              <div className="space-y-1 text-sm text-gray-700 mb-3">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.name}{p.installments > 1 ? ` (${p.installments}x)`: ''}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
                               <Separator className="mb-3" />
                               <div className="flex items-center justify-end space-x-2">
-                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(transaction, changeGiven); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>
-                                {!isCancelled && (
-                                  <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); /* Adicionar handleCancelTransaction aqui */ }}>
-                                    <Ban className="w-4 h-4 mr-2" />Cancelar Venda
-                                  </Button>
-                                )}
+                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); /* handlePrintReceipt(transaction, changeGiven); */ }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>
+                                {!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); /* Adicionar handleCancelTransaction aqui */ }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}
                               </div>
                             </div>
                           )}
@@ -729,9 +686,7 @@ const Transactions = () => {
                     );
                   })}
                 </div>
-                {transactionPagination && transactionPagination.pages > 1 && (
-                  <Pagination pagination={transactionPagination} onPageChange={setCurrentTransactionPage} itemName='vendas' />
-                )}
+                {transactionPagination && transactionPagination.pages > 1 && (<Pagination pagination={transactionPagination} onPageChange={setCurrentTransactionPage} itemName='vendas' />)}
               </CardContent>
             </Card>
           </>

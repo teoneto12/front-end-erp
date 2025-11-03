@@ -35,6 +35,7 @@ import CustomerListReport from './pages/reports/CustomerListReport.jsx';
 
 // --- Estilos Globais ---
 import './App.css';
+import Returns from './pages/Returns.jsx';
 
 // Componente que define a estrutura de rotas da aplicação
 function AppRoutes() {
@@ -92,6 +93,7 @@ function AppRoutes() {
         <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
         <Route path="reports/top-selling-products" element={<TopSellingProductsReport />} />
         <Route path="reports/sales-by-user" element={<SalesByUserReport />} />
+        <Route path="/returns" element={<Returns />} /> 
         <Route path="reports/product-list" element={<ProductListReport />} />
         <Route path="reports/customer-list" element={<CustomerListReport />} />
 

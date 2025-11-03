@@ -1,13 +1,11 @@
-// frontend/src/pages/Customers.jsx
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Importando Select
-import { Badge } from '@/components/ui/badge'; // Importando Badge
-import { Plus, Search, Edit, Trash2, Users, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Search, Edit, Trash2, Users, Loader2, DollarSign } from 'lucide-react';
 import Modal from '../components/Modal';
 import api from '../lib/api.js';
 
@@ -20,8 +18,7 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
     email: '',
     phone: '',
     document: '',
-    // ▼▼▼ NOVO CAMPO ADICIONADO ▼▼▼
-    type: 'cliente', // 'cliente', 'fornecedor', ou 'ambos'
+    type: 'cliente',
   });
 
   useEffect(() => {
@@ -31,11 +28,9 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
         email: customer.email || '',
         phone: customer.phone || '',
         document: customer.document || '',
-        // ▼▼▼ CARREGA O TIPO DO CADASTRO EXISTENTE ▼▼▼
         type: customer.type || 'cliente',
       });
     } else {
-      // Reseta para um novo cadastro
       setFormData({ name: '', email: '', phone: '', document: '', type: 'cliente' });
     }
   }, [customer]);
@@ -45,7 +40,6 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handler para o componente Select
   const handleTypeChange = (value) => {
     setFormData(prev => ({ ...prev, type: value }));
   };
@@ -62,7 +56,6 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
         <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
       </div>
 
-      {/* ▼▼▼ NOVO SELETOR DE TIPO ADICIONADO ▼▼▼ */}
       <div>
         <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cadastro *</label>
         <Select value={formData.type} onValueChange={handleTypeChange}>
@@ -100,7 +93,7 @@ const CustomerForm = ({ customer, onSave, onCancel }) => {
 };
 
 // ==================================================================
-// Página Principal (agora Cadastros)
+// Página Principal (Cadastros)
 // ==================================================================
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
@@ -109,14 +102,11 @@ const Customers = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
+  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      // A rota pode continuar a mesma, mas agora ela retorna todos os tipos
       const response = await api.get('/customers');
       setCustomers(response.data.customers || []);
     } catch (error) {
@@ -126,6 +116,10 @@ const Customers = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const handleModalClose = () => {
     setIsModalOpen(false);
@@ -164,7 +158,6 @@ const Customers = () => {
     (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Função para estilizar a badge de tipo
   const getTypeBadge = (type) => {
     switch (type) {
       case 'cliente':
@@ -217,21 +210,30 @@ const Customers = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
-                  {/* ▼▼▼ NOVA COLUNA DE TIPO ▼▼▼ */}
                   <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Saldo de Crédito</TableHead>
                   <TableHead className="text-right w-[120px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin w-6 h-6 mx-auto text-gray-400" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="animate-spin w-6 h-6 mx-auto text-gray-400" /></TableCell></TableRow>
                 ) : filteredCustomers.length > 0 ? filteredCustomers.map(customer => (
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell>{customer.email || '---'}</TableCell>
                     <TableCell>{customer.phone || '---'}</TableCell>
-                    {/* ▼▼▼ RENDERIZA A BADGE DE TIPO ▼▼▼ */}
                     <TableCell>{getTypeBadge(customer.type)}</TableCell>
+                    <TableCell className="text-right">
+                      {customer.credit_balance > 0 ? (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                          <DollarSign className="h-3 w-3 mr-1" />
+                          {formatCurrency(customer.credit_balance)}
+                        </Badge>
+                      ) : (
+                        <span className="text-gray-400">{formatCurrency(0)}</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEditingCustomer(customer); setIsModalOpen(true); }}>
@@ -244,7 +246,7 @@ const Customers = () => {
                     </TableCell>
                   </TableRow>
                 )) : (
-                  <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhum cadastro encontrado.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhum cadastro encontrado.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

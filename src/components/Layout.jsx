@@ -34,6 +34,7 @@ const Layout = () => {
     { name: 'Clientes', href: '/customers', icon: Users },
     { name: 'Usuários', href: '/users', icon: Users },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
+    { name: 'Troca/Devolução', href: '/returns', icon: BarChart3 },
     { name: 'Configurações', href: '/settings', icon: Settings },
   ];
 
