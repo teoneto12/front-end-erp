@@ -1,4 +1,4 @@
-// Em /src/components/Layout.jsx (VERSÃO COMPLETA E CORRIGIDA)
+// src/components/Layout.jsx
 
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
@@ -6,12 +6,13 @@ import { useAuth } from '../hooks/useAuth.js';
 import { Button } from '@/components/ui/button';
 import { 
   Home, Package, Layers, Grid3X3, Tag, ShoppingCart, Landmark, CreditCard, 
-  Users, BarChart3, Settings, LogOut, Menu, X, Soup // Adicionado o ícone X e Soup
-} from 'lucide-react';''
+  Users, BarChart3, Settings, LogOut, Menu, X, Soup, Repeat, ChevronDown, ChevronRight, Wallet, Monitor, Share2, Search  // Novos ícones
+} from 'lucide-react';
 import '../App.css';
 
 const Layout = () => { 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openMenus, setOpenMenus] = useState({}); // Estado para controlar menus abertos
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -21,35 +22,136 @@ const Layout = () => {
     navigate('/login');
   };
 
+  // ==================================================================
+  // NOVA ESTRUTURA DE NAVEGAÇÃO
+  // ==================================================================
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Produtos', href: '/products', icon: Package },
-    { name: 'Seções', href: '/sections', icon: Layers },
-    { name: 'Grupos', href: '/groups', icon: Grid3X3 },
-    { name: 'Pré-Vendas', href: '/pre-sales', icon: Tag },
-    { name: 'Transações', href: '/transactions', icon: ShoppingCart },
-    { name: 'Cozinha', href: '/kitchen', icon: Soup }, // Exemplo de link adicionado
+    { 
+      name: 'Produtos', 
+      icon: Package,
+      // Sub-itens para o menu de Produtos
+      subItems: [
+        { name: 'Listar Produtos', href: '/products', icon: Package },
+        { name: 'Seções', href: '/sections', icon: Layers },
+        { name: 'Grupos', href: '/groups', icon: Grid3X3 },
+      ]
+    },
+    { 
+      name: 'Caixa', 
+      icon: Wallet, // Novo ícone para Caixa
+      // Sub-itens para o menu de Caixa
+      subItems: [
+        { name: 'Frente de Caixa', href: '/transactions', icon: ShoppingCart },
+        { name: 'Pré-Vendas', href: '/pre-sales', icon: Tag },
+        { name: 'Trocas e Devoluções', href: '/returns', icon: Repeat },
+        { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard },
+        { name: 'Cozinha', href: '/kitchen', icon: Soup },
+      ]
+    },
     { name: 'Financeiro', href: '/finance', icon: Landmark },
-    { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard },
-    { name: 'Clientes', href: '/customers', icon: Users },
-    { name: 'Usuários', href: '/users', icon: Users },
+    { name: 'Pessoas',
+      icon: Users,
+      
+      subItems:[
+        {name: 'Usuários', href: '/users', icon: Users},
+        {name: 'Clientes/Fornecedores', href: '/customers', icon: Users },
+      ]
+       },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
-    { name: 'Troca/Devolução', href: '/returns', icon: BarChart3 },
-    { name: 'Configurações', href: '/settings', icon: Settings },
+    { 
+      name: 'Configurações', 
+      icon: Settings,
+      subItems: [
+        { name: 'Geral', href: '/settings', icon: Settings },
+        { name: 'Estações de Trabalho', href: '/workstations', icon: Monitor }, // <-- NOVA LINHA
+      ]
+    },
+
+    {
+      name: 'Vendas',
+      icon: ShoppingCart,
+      subItems: [
+        { name: 'Pedido de Venda (VF)', href: '/varejo-facil/pedido-venda', icon: ShoppingCart }
+      ]
+    },
+
+    { 
+      name: 'Integrações', 
+      icon: Share2,
+      subItems: [
+        { name: 'Configuração (VF)', href: '/integrations/varejo-facil', icon: Settings },
+        { name: 'Consultar Produtos (VF)', href: '/integrations/varejo-facil/search-products', icon: Search },
+      ]
+    },
   ];
 
-  // Componente de navegação reutilizável para evitar repetição de código
+  // Função para alternar a visibilidade de um submenu
+  const toggleMenu = (menuName) => {
+    setOpenMenus(prev => ({ ...prev, [menuName]: !prev[menuName] }));
+  };
+
+  // Componente de navegação reutilizável com a nova lógica de submenus
   const SidebarNavigation = () => (
     <nav className="mt-5 flex-1 px-2 space-y-1">
       {navigation.map((item) => {
         const Icon = item.icon;
-        const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-        
+        const isParentActive = item.subItems && item.subItems.some(sub => location.pathname.startsWith(sub.href));
+        const isOpen = openMenus[item.name]
+
+        // Se o item tiver sub-itens, renderiza um botão expansível
+        if (item.subItems) {
+          return (
+            <div key={item.name}>
+              <button
+                onClick={() => toggleMenu(item.name)}
+                className={`group w-full flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                  isParentActive
+                    ? 'bg-blue-50 text-blue-800'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Icon className="mr-3 h-5 w-5" />
+                  {item.name}
+                </div>
+                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+              {/* Renderiza os sub-itens se o menu estiver aberto */}
+              {isOpen && (
+                <div className="pl-4 mt-1 space-y-1">
+                  {item.subItems.map(subItem => {
+                    const SubIcon = subItem.icon;
+                    const isSubActive = location.pathname === subItem.href || (subItem.href !== '/' && location.pathname.startsWith(subItem.href));
+                    return (
+                      <Link
+                        key={subItem.name}
+                        to={subItem.href}
+                        onClick={() => setSidebarOpen(false)}
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                          isSubActive
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <SubIcon className="mr-3 h-5 w-5" />
+                        {subItem.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // Se não tiver sub-itens, renderiza um link simples
+        const isActive = location.pathname === item.href;
         return (
           <Link
             key={item.name}
             to={item.href}
-            onClick={() => setSidebarOpen(false)} // Fecha o menu ao clicar em um link no mobile
+            onClick={() => setSidebarOpen(false)}
             className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
               isActive
                 ? 'bg-blue-100 text-blue-900'
@@ -64,6 +166,7 @@ const Layout = () => {
     </nav>
   );
 
+  // O resto do seu componente Layout (sidebar de desktop, mobile, conteúdo principal) permanece o mesmo
   return (
     <div className="min-h-screen bg-gray-50">
       {/* --- Sidebar para Desktop --- */}
@@ -91,15 +194,10 @@ const Layout = () => {
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* ▼▼▼ CÓDIGO DO SIDEBAR MOBILE CORRIGIDO E COMPLETO AQUI ▼▼▼ */}
-      {/* ================================================================== */}
+      {/* --- Sidebar para Mobile --- */}
       {sidebarOpen && (
         <div className="fixed inset-0 flex z-40 md:hidden" role="dialog" aria-modal="true">
-          {/* Overlay escuro que fecha o menu ao ser clicado */}
           <div className="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" onClick={() => setSidebarOpen(false)}></div>
-          
-          {/* Conteúdo do Sidebar Mobile */}
           <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
             <div className="absolute top-0 right-0 -mr-12 pt-2">
               <Button
@@ -112,26 +210,29 @@ const Layout = () => {
                 <X className="h-6 w-6" />
               </Button>
             </div>
-            
             <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
               <div className="flex-shrink-0 flex items-center px-4">
                 <h1 className="text-xl font-bold text-gray-900">Sistema de Gestão</h1>
               </div>
-              {/* Reutilizando o componente de navegação */}
               <SidebarNavigation />
             </div>
             <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-              {/* ... (informações do usuário e botão de logout) ... */}
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center">
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-700">{user?.username}</p>
+                    <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-500 hover:text-gray-700">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
-          <div className="flex-shrink-0 w-14" aria-hidden="true">
-            {/* Espaço para empurrar o menu para a esquerda */}
-          </div>
+          <div className="flex-shrink-0 w-14" aria-hidden="true"></div>
         </div>
       )}
-      {/* ================================================================== */}
-      {/* ▲▲▲ FIM DA CORREÇÃO DO SIDEBAR MOBILE ▲▲▲ */}
-      {/* ================================================================== */}
 
       {/* --- Conteúdo Principal --- */}
       <div className="md:pl-64 flex flex-col flex-1">

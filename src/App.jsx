@@ -23,7 +23,7 @@ import Finance from './pages/Finance.jsx';
 import Customers from './pages/Customers.jsx';
 import PaymentMethods from './pages/PaymentMethods.jsx';
 import PreSales from './pages/PreSales.jsx';
-
+import Workstations from './pages/Workstations.jsx';
 // --- Páginas de Relatórios ---
 import ReportsPage from './pages/Reports.jsx';
 import SalesByPeriodPage from './pages/reports/SalesByPeriodPage.jsx';
@@ -32,6 +32,8 @@ import TopSellingProductsReport from './pages/reports/TopSellingProductsReport.j
 import SalesByUserReport from './pages/reports/SalesByUserReport.jsx';
 import ProductListReport from './pages/reports/ProductListReport.jsx';
 import CustomerListReport from './pages/reports/CustomerListReport.jsx';
+import VarejoFacil from './components/VarejoFacil.jsx';
+import PedidoVendaVarejo from './pages/PedidoVendaVarejo.jsx';
 
 // --- Estilos Globais ---
 import './App.css';
@@ -86,6 +88,8 @@ function AppRoutes() {
         <Route path="pre-sales" element={<PreSales />} />
         <Route path="finance" element={<Finance />} />
         <Route path="payment-methods" element={<PaymentMethods />} />
+        <Route path="workstations" element={<Workstations />}/>
+
         
         {/* Rotas de Relatórios */}
         <Route path="reports" element={<ReportsPage />} />
@@ -96,6 +100,9 @@ function AppRoutes() {
         <Route path="/returns" element={<Returns />} /> 
         <Route path="reports/product-list" element={<ProductListReport />} />
         <Route path="reports/customer-list" element={<CustomerListReport />} />
+        <Route path="integrations/varejo-facil" element={<VarejoFacil />} />
+        <Route path="/varejo-facil/pedido-venda" element={<PedidoVendaVarejo />} />
+        
 
         {/* 
           A rota de configurações dentro da área logada pode ser mantida

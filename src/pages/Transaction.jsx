@@ -1,6 +1,6 @@
-// frontend/src/pages/Transactions.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api.js';
+import axios from 'axios'; // Usado para chamadas diretas ao serviço de impressão local
 
 // --- COMPONENTES DE UI ---
 import { Button } from '@/components/ui/button';
@@ -10,12 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, Ban, FileDown, Banknote, CreditCard, Smartphone, FileText, ChevronDown, User, Repeat, ArrowUpCircle, ArrowDownCircle, DoorClosed, Loader2, Store, AlertTriangle, Gift, Tag, XCircle } from 'lucide-react';
+import { Plus, Search, ShoppingCart, Trash2, X, Minus, Calculator, Printer, Ban, FileDown, Banknote, CreditCard, Smartphone, FileText, ChevronDown, User, Repeat, ArrowUpCircle, ArrowDownCircle, DoorClosed, Loader2, Store, AlertTriangle, Gift, Tag, XCircle, Monitor } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import Modal from '../components/Modal';
 import '../App.css';
 
-// Importações adicionais
+// Importações dos componentes de Modal e Dashboard
 import Dashboard from '../components/Dashboard'; 
 import { exportToPDF } from '../lib/pdfGenerator.js';
 import DiscountModal from '../components/DiscountModal';
@@ -23,7 +23,7 @@ import PaymentModal from '../components/PaymentModal';
 import InstallmentModal from '../components/InstallmentModal';
 
 // ==================================================================
-// COMPONENTES DE MODAIS AUXILIARES (sem alterações)
+// COMPONENTES DE MODAIS AUXILIARES
 // ==================================================================
 const ReceiptOptionsModal = ({ transaction, change, onPrint, onPDF, onClose }) => {
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
@@ -167,6 +167,7 @@ const Transactions = () => {
   const [closeSummary, setCloseSummary] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isOldSession, setIsOldSession] = useState(false);
+  const [localCaixaId, setLocalCaixaId] = useState('Desconhecido');
 
   // --- ESTADOS DO DASHBOARD E HISTÓRICO ---
   const [transactions, setTransactions] = useState([]);
@@ -299,10 +300,7 @@ const Transactions = () => {
 
   useEffect(() => {
     if (view === 'pdv') {
-      fetchProducts(currentProductPage, productSearchTerm
-
-
-        , productSearchTerm);
+      fetchProducts(currentProductPage, productSearchTerm);
       fetchCustomers();
     }
   }, [view, currentProductPage, productSearchTerm, fetchProducts, fetchCustomers]);
@@ -386,14 +384,40 @@ const Transactions = () => {
       };
       const response = await api.post('/transactions', transactionData);
       const finalChange = Math.max(0, totalPaid - totalAmount);
+      
+      // ==================================================================
+      // INÍCIO DA CORREÇÃO DEFINITIVA
+      // ==================================================================
+
+      // 1. Primeiro, verificamos o status do serviço de impressão
+      try {
+        const printStatusResponse = await axios.get('http://localhost:5000/status', { timeout: 2000 } );
+        setLocalCaixaId(printStatusResponse.data.caixaId || 'Não Configurado');
+      } catch (err) {
+        console.error("Serviço de impressão local não encontrado ao finalizar a venda.", err);
+        setLocalCaixaId('Serviço Offline');
+      }
+
+      // 2. Preparamos os dados para o modal de recibo
       setLastChange(finalChange);
       setLastTransaction(response.data.transaction);
       
+      // 3. Limpamos o PDV
       resetPDVFields();
+      
+      // 4. Fechamos o modal de pagamento
       setModal(null);
-      setShowReceiptOptions(true);
+      
+      // 5. SÓ AGORA, com o status da impressora já conhecido, abrimos o modal de recibo
+      setShowReceiptOptions(true); 
+      
+      // ==================================================================
+      // FIM DA CORREÇÃO DEFINITIVA
+      // ==================================================================
+
       fetchTransactions(1);
       checkSessionStatus();
+
     } catch (error) {
       alert('Erro ao finalizar venda: ' + (error.response?.data?.error || error.message));
     } finally {
@@ -417,6 +441,51 @@ const Transactions = () => {
     setModal('payment');
   };
 
+  const handlePrintReceipt = async (transaction) => {
+    if (localCaixaId === 'Verificando...') {
+        alert("Aguarde um momento, o sistema está verificando o status do serviço de impressão. Tente novamente em 2 segundos.");
+        return;
+    }
+    if (localCaixaId === 'Serviço Offline' || localCaixaId === 'Não Configurado' || localCaixaId === 'Desconhecido') {
+        alert(`Não é possível imprimir. O serviço de impressão local está: ${localCaixaId}.`);
+        return;
+    }
+
+    const totalPaid = (transaction.payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0);
+    const change = Math.max(0, totalPaid - parseFloat(transaction.total_amount));
+    const subtotal = (transaction.items || []).reduce((acc, item) => acc + parseFloat(item.subtotal), 0);
+    const discountAmount = subtotal - parseFloat(transaction.total_amount);
+
+    const receiptData = {
+      saleNumber: transaction.sale_number,
+      transactionDate: new Date(transaction.transaction_date),
+      customerName: transaction.customer_name,
+      items: (transaction.items || []).map(item => ({
+        productName: item.product_name,
+        quantity: item.quantity,
+        subtotal: parseFloat(item.subtotal)
+      })),
+      payments: (transaction.payments || []).map(p => ({
+        paymentMethodName: p.payment_method_name,
+        amount: parseFloat(p.amount)
+      })),
+      subtotal: subtotal,
+      discountAmount: discountAmount,
+      totalAmount: parseFloat(transaction.total_amount),
+      change: change
+    };
+
+    try {
+        await axios.post('http://localhost:5000/print', receiptData );
+        alert(`Cupom enviado para a impressora do ${localCaixaId}!`);
+        setShowReceiptOptions(false);
+    } catch (error) {
+        console.error('Falha ao enviar para impressão:', error);
+        const errorMessage = error.response?.data?.detail || "Verifique se o serviço de impressão está rodando.";
+        alert(`Não foi possível imprimir.\n\nMotivo: ${errorMessage}`);
+    }
+  };
+
   const getPaymentMethodIcon = (methodName) => {
     const name = methodName?.toLowerCase() || '';
     if (name.includes('dinheiro')) return <Banknote className="w-4 h-4" />;
@@ -437,7 +506,13 @@ const Transactions = () => {
     return (
       <div className="fixed inset-0 bg-white z-50 p-4 flex flex-col">
         <header className="flex justify-between items-center pb-4 border-b flex-shrink-0">
-          <h2 className="text-2xl font-bold">Frente de Loja</h2>
+          <div>
+            <h2 className="text-2xl font-bold">Frente de Loja</h2>
+            <div className="flex items-center text-sm text-gray-500 mt-1">
+              <Monitor className="w-4 h-4 mr-2" />
+              <span>Operando no caixa: <strong>{localCaixaId}</strong></span>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setModal('SUPRIMENTO')}><ArrowUpCircle className="w-4 h-4 mr-2" />Suprimento</Button>
             <Button variant="outline" onClick={() => setModal('SANGRIA')} className="text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"><ArrowDownCircle className="w-4 h-4 mr-2" />Sangria</Button>
@@ -491,7 +566,10 @@ const Transactions = () => {
                   <p className="text-lg">Seu carrinho está vazio.</p>
                   <p className="text-sm text-gray-400">Adicione produtos da lista à esquerda.</p>
                 </div>
-              ) : cart.map((item) => (
+              ) : cart.
+
+
+              map((item) => (
                 <Card key={item.product_id}>
                   <CardContent className="p-3">
                     <div className="flex justify-between items-start mb-2">
@@ -576,7 +654,7 @@ const Transactions = () => {
             <ReceiptOptionsModal 
               transaction={lastTransaction} 
               change={lastChange} 
-              onPrint={() => { /* Lógica de impressão aqui */ }} 
+              onPrint={() => handlePrintReceipt(lastTransaction)} 
               onPDF={() => { exportToPDF([lastTransaction]); setShowReceiptOptions(false); setLastTransaction(null); }} 
               onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} 
             />
@@ -613,12 +691,25 @@ const Transactions = () => {
         </Button>
       </div>
 
+      {/* MODAIS GLOBAIS DA TELA DE DASHBOARD */}
       {modal === 'open_cashier' && (
         <Modal open={true} onClose={() => setModal(null)} title="Abrir Caixa" maxWidth="max-w-md">
           <OpenCashierModal onOpen={handleOpenCashier} openingBalance={openingBalance} setOpeningBalance={setOpeningBalance} isOpening={isOpening} />
         </Modal>
       )}
+      {showReceiptOptions && lastTransaction && (
+        <Modal open={true} onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} title="Venda Concluída" maxWidth="max-w-md">
+          <ReceiptOptionsModal 
+            transaction={lastTransaction} 
+            change={lastChange} 
+            onPrint={() => handlePrintReceipt(lastTransaction)} 
+            onPDF={() => { exportToPDF([lastTransaction]); setShowReceiptOptions(false); setLastTransaction(null); }} 
+            onClose={() => { setShowReceiptOptions(false); setLastTransaction(null); }} 
+          />
+        </Modal>
+      )}
 
+      {/* Conteúdo Principal: Dashboard e Histórico de Vendas */}
       <div className="flex-grow flex flex-col gap-6">
         {loading ? (
           <div className="flex items-center justify-center h-64"><Loader2 className="w-10 h-10 animate-spin text-gray-400" /></div>
@@ -645,7 +736,7 @@ const Transactions = () => {
                   {transactions.map((transaction) => {
                     const isCancelled = transaction.status === 'CANCELADO';
                     const totalPaid = (transaction.payments || []).reduce((acc, p) => acc + parseFloat(p.amount), 0);
-                    const changeGiven = Math.max(0, totalPaid - transaction.total_amount);
+                    const changeGiven = Math.max(0, totalPaid - parseFloat(transaction.total_amount));
                     const isInstallment = (transaction.payments || []).some(p => p.installments > 1);
 
                     return (
@@ -663,7 +754,7 @@ const Transactions = () => {
                                 </div>
                               </div>
                               <div className="flex items-center">
-                                <div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.name)}</div>)}</div></div>
+                                <div className="text-right mr-4"><div className={`font-bold text-lg ${isCancelled ? 'text-gray-500 line-through' : 'text-green-600'}`}>{formatCurrency(transaction.total_amount)}</div><div className="flex items-center justify-end text-sm text-gray-600 space-x-2">{(transaction.payments || []).map((p, index) => <div key={index}>{getPaymentMethodIcon(p.payment_method_name)}</div>)}</div></div>
                                 <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedTransactionId === transaction.id ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
@@ -673,10 +764,10 @@ const Transactions = () => {
                               <p className="text-sm font-medium">Itens da Venda:</p>
                               <div className="space-y-1 text-sm text-gray-700 mb-4">{(transaction.items || []).map((item, index) => (<div key={index} className="flex justify-between"><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.subtotal)}</span></div>))}</div>
                               <p className="text-sm font-medium mb-2">Pagamentos:</p>
-                              <div className="space-y-1 text-sm text-gray-700 mb-3">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.name}{p.installments > 1 ? ` (${p.installments}x)`: ''}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
+                              <div className="space-y-1 text-sm text-gray-700 mb-3">{(transaction.payments || []).map((p, index) => (<div key={index} className="flex justify-between"><span className="capitalize">{p.payment_method_name}{p.installments > 1 ? ` (${p.installments}x)`: ''}</span><span>{formatCurrency(p.amount)}</span></div>))}</div>
                               <Separator className="mb-3" />
                               <div className="flex items-center justify-end space-x-2">
-                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); /* handlePrintReceipt(transaction, changeGiven); */ }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>
+                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(transaction); }}><Printer className="w-4 h-4 mr-2" />Imprimir Recibo</Button>
                                 {!isCancelled && (<Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); /* Adicionar handleCancelTransaction aqui */ }}><Ban className="w-4 h-4 mr-2" />Cancelar Venda</Button>)}
                               </div>
                             </div>
