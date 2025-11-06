@@ -35,6 +35,7 @@ import CustomerListReport from './pages/reports/CustomerListReport.jsx';
 import VarejoFacil from './components/VarejoFacil.jsx';
 import PedidoVendaVarejo from './pages/PedidoVendaVarejo.jsx';
 
+
 // --- Estilos Globais ---
 import './App.css';
 import Returns from './pages/Returns.jsx';
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path="reports/customer-list" element={<CustomerListReport />} />
         <Route path="integrations/varejo-facil" element={<VarejoFacil />} />
         <Route path="/varejo-facil/pedido-venda" element={<PedidoVendaVarejo />} />
+        
         
 
         {/* 
