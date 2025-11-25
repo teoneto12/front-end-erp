@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api.js';
 import axios from 'axios'; // Usado para chamadas diretas ao serviço de impressão local
+import { useHotkeys } from 'react-hotkeys-hook'; // Importação da biblioteca de atalhos
 
 // --- COMPONENTES DE UI ---
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ const ReceiptOptionsModal = ({ transaction, change, onPrint, onPDF, onClose }) =
         <Button onClick={onPrint} className="bg-blue-600 hover:bg-blue-700"><Printer className="w-4 h-4 mr-2" />Imprimir Cupom</Button>
         <Button onClick={onPDF} variant="outline"><FileText className="w-4 h-4 mr-2" />Gerar PDF</Button>
       </div>
-      <div className="text-center pt-2"><Button variant="ghost" onClick={onClose}>Fechar</Button></div>
+      <div className="text-center pt-2"><Button variant="ghost" onClick={onClose}>Fechar (ESC)</Button></div>
     </div>
   );
 };
@@ -61,14 +62,14 @@ const CashMovementModal = ({ type, onConfirm, onCancel }) => {
       <h3 className="text-lg font-medium">{type === 'SANGRIA' ? 'Registrar Sangria (Retirada)' : 'Registrar Suprimento (Entrada)'}</h3>
       <div>
         <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
-        <Input id="amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+        <Input id="amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus/>
       </div>
       <div>
         <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
         <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} required />
       </div>
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>Cancelar (ESC)</Button>
         <Button type="submit">Confirmar</Button>
       </div>
     </form>
@@ -154,11 +155,9 @@ const CloseCashierModal = ({ onConfirm, summary, onClose, isClosing, paymentMeth
 // COMPONENTE PRINCIPAL (Transactions)
 // ==================================================================
 const Transactions = () => {
-  // --- ESTADOS DE CONTROLE DE FLUXO E MODAIS ---
+  // --- ESTADOS ---
   const [view, setView] = useState('dashboard');
   const [modal, setModal] = useState(null);
-  
-  // --- ESTADOS DE CONTROLE DE CAIXA ---
   const [activeSession, setActiveSession] = useState(null);
   const [isCashierOpen, setIsCashierOpen] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -168,8 +167,6 @@ const Transactions = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [isOldSession, setIsOldSession] = useState(false);
   const [localCaixaId, setLocalCaixaId] = useState('Desconhecido');
-
-  // --- ESTADOS DO DASHBOARD E HISTÓRICO ---
   const [transactions, setTransactions] = useState([]);
   const [transactionPagination, setTransactionPagination] = useState(null);
   const [transactionSearchTerm, setTransactionSearchTerm] = useState('');
@@ -177,8 +174,6 @@ const Transactions = () => {
   const [expandedTransactionId, setExpandedTransactionId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
-
-  // --- ESTADOS DA VENDA (PDV) ---
   const [products, setProducts] = useState([]);
   const [productPagination, setProductPagination] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -192,13 +187,11 @@ const Transactions = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState('none');
   const [customerCredit, setCustomerCredit] = useState(0);
   const [installmentPayment, setInstallmentPayment] = useState(null);
-  
-  // --- ESTADOS DO MODAL DE RECIBO ---
   const [showReceiptOptions, setShowReceiptOptions] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
   const [lastChange, setLastChange] = useState(0);
 
-  // --- FUNÇÕES DE CONTROLE DE CAIXA ---
+  // --- FUNÇÕES DE LÓGICA ---
   const checkSessionStatus = useCallback(async () => {
     setCheckingSession(true);
     try {
@@ -257,7 +250,6 @@ const Transactions = () => {
   
   const logoutAndReset = () => window.location.reload();
 
-  // --- FUNÇÕES DE BUSCA (API) ---
   const fetchTransactions = useCallback(async (page = 1, search = '', dates = {}) => {
     setLoading(true);
     try {
@@ -291,7 +283,21 @@ const Transactions = () => {
     } catch (error) { console.error('Erro ao carregar clientes:', error); }
   }, []);
 
-  // --- EFEITOS ---
+  const hotkeyOptions = { preventDefault: true, enableOnTags: ['INPUT', 'SELECT', 'TEXTAREA'] };
+
+  useHotkeys('f1', handleFrenteDeLojaClick, hotkeyOptions);
+  useHotkeys('f2', () => { if (view === 'pdv' && cart.length > 0) setModal('payment'); }, hotkeyOptions);
+  useHotkeys('f3', () => { if (view === 'pdv') document.getElementById('product-search-input')?.focus(); }, hotkeyOptions);
+  useHotkeys('f4', () => { if (view === 'pdv') document.getElementById('customer-select-trigger')?.focus(); }, hotkeyOptions);
+  useHotkeys('f7', () => { if (view === 'pdv' && cart.length > 0 && window.confirm('Tem certeza que deseja cancelar a venda atual? (F7)')) resetPDVFields(); }, hotkeyOptions);
+  useHotkeys('f8', () => { if (view === 'pdv' && cart.length > 0) setModal('discount'); }, hotkeyOptions);
+  useHotkeys('f9', () => { if (view === 'pdv') setModal('close_cashier'); }, hotkeyOptions);
+  useHotkeys('esc', () => {
+    if (modal) setModal(null);
+    else if (showReceiptOptions) setShowReceiptOptions(false);
+    else if (view === 'pdv') setView('dashboard');
+  }, { enableOnTags: ['INPUT', 'SELECT', 'TEXTAREA'] });
+
   useEffect(() => {
     checkSessionStatus();
     fetchTransactions(currentTransactionPage, transactionSearchTerm, dateFilter);
@@ -319,7 +325,6 @@ const Transactions = () => {
     fetchCustomerBalance();
   }, [selectedCustomerId]);
 
-  // --- FUNÇÕES DE LÓGICA DO PDV ---
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
   const formatDate = (dateString) => new Date(dateString).toLocaleString('pt-BR');
   const toggleTransactionDetails = (id) => setExpandedTransactionId(prevId => (prevId === id ? null : id));
@@ -363,8 +368,11 @@ const Transactions = () => {
   
   const handleFinalizeSale = async () => {
     const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+    
+    // CORREÇÃO 1: A validação agora usa 'totalAmount', que já considera o desconto.
+    // A pequena tolerância de 0.01 é mantida para evitar erros de arredondamento.
     if (totalPaid < totalAmount - 0.01) {
-      alert("O valor pago é menor que o total da venda. Finalize o pagamento.");
+      alert(`Valor insuficiente. A soma dos pagamentos (${formatCurrency(totalPaid)}) é menor que o total da venda (${formatCurrency(totalAmount)}).`);
       return;
     }
 
@@ -380,16 +388,16 @@ const Transactions = () => {
         customer_id: selectedCustomerId === 'none' ? null : parseInt(selectedCustomerId, 10),
         items: cart.map(item => ({ product_id: item.product_id, quantity: item.quantity, unit_price: item.unit_price })),
         payments: payments.map(p => ({ payment_method_id: p.payment_method_id, amount: p.amount, installments: p.installments || 1 })),
-        discount: discount,
+        
+        // CORREÇÃO 2: Enviando o valor do desconto já calculado.
+        // O nome da chave 'discount_amount' é uma suposição comum. Se o seu backend
+        // espera outro nome (ex: 'discountValue', 'desconto'), ajuste aqui.
+        discount_amount: discountAmount,
       };
+
       const response = await api.post('/transactions', transactionData);
       const finalChange = Math.max(0, totalPaid - totalAmount);
       
-      // ==================================================================
-      // INÍCIO DA CORREÇÃO DEFINITIVA
-      // ==================================================================
-
-      // 1. Primeiro, verificamos o status do serviço de impressão
       try {
         const printStatusResponse = await axios.get('http://localhost:5000/status', { timeout: 2000 } );
         setLocalCaixaId(printStatusResponse.data.caixaId || 'Não Configurado');
@@ -398,23 +406,12 @@ const Transactions = () => {
         setLocalCaixaId('Serviço Offline');
       }
 
-      // 2. Preparamos os dados para o modal de recibo
       setLastChange(finalChange);
       setLastTransaction(response.data.transaction);
-      
-      // 3. Limpamos o PDV
       resetPDVFields();
-      
-      // 4. Fechamos o modal de pagamento
       setModal(null);
-      
-      // 5. SÓ AGORA, com o status da impressora já conhecido, abrimos o modal de recibo
       setShowReceiptOptions(true); 
       
-      // ==================================================================
-      // FIM DA CORREÇÃO DEFINITIVA
-      // ==================================================================
-
       fetchTransactions(1);
       checkSessionStatus();
 
@@ -476,7 +473,7 @@ const Transactions = () => {
     };
 
     try {
-        await axios.post('http://localhost:5000/print', receiptData );
+        await axios.post('http://localhost:5000/print', receiptData  );
         alert(`Cupom enviado para a impressora do ${localCaixaId}!`);
         setShowReceiptOptions(false);
     } catch (error) {
@@ -516,14 +513,14 @@ const Transactions = () => {
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setModal('SUPRIMENTO')}><ArrowUpCircle className="w-4 h-4 mr-2" />Suprimento</Button>
             <Button variant="outline" onClick={() => setModal('SANGRIA')} className="text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"><ArrowDownCircle className="w-4 h-4 mr-2" />Sangria</Button>
-            <Button variant="destructive" onClick={() => setModal('close_cashier')}><DoorClosed className="w-4 h-4 mr-2" />Fechar Caixa</Button>
-            <Button variant="ghost" size="icon" onClick={() => setView('dashboard')}><X className="w-5 h-5" /></Button>
+            <Button variant="destructive" onClick={() => setModal('close_cashier')}><DoorClosed className="w-4 h-4 mr-2" />Fechar Caixa (F9)</Button>
+            <Button variant="ghost" size="icon" onClick={() => setView('dashboard')}><X className="w-5 h-5" /> (ESC)</Button>
           </div>
         </header>
         
         <main className="flex-grow flex overflow-hidden pt-4">
           <div className="flex-1 p-4 border-r flex flex-col">
-            <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input placeholder="Buscar produtos..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="pl-10" /></div></div>
+            <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" /><Input id="product-search-input" placeholder="Buscar produtos... (F3)" value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="pl-10" /></div></div>
             <div className="flex-grow overflow-y-auto mb-4 border rounded-lg">
               <Table><TableHeader className="sticky top-0 bg-gray-50 z-10"><TableRow><TableHead>Produto</TableHead><TableHead className="text-center">Estoque</TableHead><TableHead className="text-right">Preço</TableHead><TableHead className="text-center">Ação</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -541,20 +538,19 @@ const Transactions = () => {
               <h2 className="text-xl font-bold mb-4 flex items-center"><ShoppingCart className="w-5 h-5 mr-2" />Carrinho ({cart.reduce((acc, item) => acc + item.quantity, 0)})</h2>
               
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">Indicar Cliente (para Crediário/Voucher)</label>
+                <label className="block text-sm font-medium mb-1">Indicar Cliente (F4)</label>
                 <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um cliente..." /></SelectTrigger>
+                  <SelectTrigger id="customer-select-trigger"><SelectValue placeholder="Selecione um cliente..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum (Consumidor Final)</SelectItem>
                     {customers.map(customer => (<SelectItem key={customer.id} value={customer.id.toString()}>{customer.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="grid grid-cols-3 gap-2 mb-4">
-                <Button variant="outline" onClick={() => setModal('discount')}><Tag className="w-4 h-4 mr-2" />Aplicar Desconto</Button>
+                <Button variant="outline" onClick={() => setModal('discount')}><Tag className="w-4 h-4 mr-2" />Desconto (F8)</Button>
                 <Button variant="outline" onClick={() => setCart([])}><Trash2 className="w-4 h-4 mr-2" />Limpar Itens</Button>
-                <Button variant="outline" onClick={resetPDVFields}><XCircle className="w-4 h-4 mr-2" />Cancelar Venda</Button>
+                <Button variant="outline" onClick={resetPDVFields}><XCircle className="w-4 h-4 mr-2" />Cancelar Venda (F7)</Button>
               </div>
               <Separator />
             </div>
@@ -566,10 +562,7 @@ const Transactions = () => {
                   <p className="text-lg">Seu carrinho está vazio.</p>
                   <p className="text-sm text-gray-400">Adicione produtos da lista à esquerda.</p>
                 </div>
-              ) : cart.
-
-
-              map((item) => (
+              ) : cart.map((item) => (
                 <Card key={item.product_id}>
                   <CardContent className="p-3">
                     <div className="flex justify-between items-start mb-2">
@@ -597,9 +590,9 @@ const Transactions = () => {
                 <Separator />
                 <div className="flex justify-between font-bold text-3xl"><span>TOTAL:</span><span>{formatCurrency(totalAmount)}</span></div>
               </div>
-              <Button onClick={() => setModal('payment')} disabled={cart.length === 0} className="w-full bg-green-600 h-20 text-2xl">
+              <Button onClick={() => setModal('payment')} disabled={cart.length === 0} className="w-full bg-green-600 hover:bg-green-700 h-20 text-2xl">
                 <Calculator className="w-8 h-8 mr-4" />
-                PAGAMENTO
+                PAGAMENTO (F2)
               </Button>
             </div>
           </div>
@@ -687,7 +680,7 @@ const Transactions = () => {
         </div>
         <Button onClick={handleFrenteDeLojaClick} className="bg-green-600 hover:bg-green-700 py-6 text-lg">
           <Store className="w-6 h-6 mr-3" />
-          Frente de Loja
+          Frente de Loja (F1)
         </Button>
       </div>
 

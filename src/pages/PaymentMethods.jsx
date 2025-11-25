@@ -208,7 +208,7 @@
         </Card>
 
         {isModalOpen && (
-          <Modal open={isModalOpen} onClose={handleCloseModal} title={editingMethod ? 'Editar Forma de Pagamento' : 'Nova Forma de Pagamento'}>
+          <Modal open={isModalOpen} onClose={handleCloseModal} title={editingMethod ? 'Editar Forma de Pagamento' : 'Nova Forma de Pagamento'} maxWidth="max-w-6xl"> 
             <PaymentMethodForm method={editingMethod} onSave={handleSave} onCancel={handleCloseModal} />
           </Modal>
         )}

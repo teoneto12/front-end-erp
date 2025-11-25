@@ -1,38 +1,64 @@
-/* app.css LIMPO E CORRIGIDO */
+/* app.css - ATUALIZADO PARA O NOVO TEMA */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================================== */
+/* ▼▼▼ SEÇÃO DE VARIÁVEIS DE TEMA (THEME) ▼▼▼                       */
+/* ================================================================== */
 @layer base {
+  /* ------------------------------------------------------------------ */
+  /* TEMA CLARO (LIGHT MODE) - Estes são os valores que você precisa. */
+  /* ------------------------------------------------------------------ */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Fundo e Texto Principal */
+    --background: 220 14.3% 95.9%;      /* #F1F5F9 (Cinza bem claro, quase branco azulado) */
+    --foreground: 224 71.4% 4.1%;       /* #020817 (Preto azulado para texto) */
+
+    /* Cards e Popovers */
+    --card: 0 0% 100%;                   /* #FFFFFF (Branco puro) */
+    --card-foreground: 224 71.4% 4.1%;   /* #020817 (Texto dentro dos cards) */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    /* Cor Primária (Azul) - O coração do tema */
+    --primary: 217.2 91.2% 59.8%;       /* #3B82F6 (Azul principal para botões e ícones) */
+    --primary-foreground: 210 20% 98%;   /* #FAFAFA (Texto branco/claro para botões primários) */
+
+    /* Cor Secundária (Cinzas para fundos sutis) */
+    --secondary: 220 14.3% 95.9%;      /* #F1F5F9 (Fundo de inputs, etc.) */
+    --secondary-foreground: 224 71.4% 4.1%;
+
+    /* Cores "Muted" (Textos secundários e placeholders) */
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%; /* #64748B (Cinza azulado para textos de apoio) */
+
+    /* Cores de "Accent" (Hover de itens de menu, etc.) */
+    --accent: 220 13% 91%;              /* #E2E8F0 (Cinza um pouco mais escuro para hover) */
+    --accent-foreground: 224 71.4% 4.1%;
+
+    /* Cores Destrutivas (Vermelho para ações de perigo) */
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --destructive-foreground: 210 20% 98%;
+
+    /* Bordas e Inputs */
+    --border: 220 13% 91%;              /* #E2E8F0 (Borda dos cards e inputs) */
+    --input: 220 13% 91%;
+    --ring: 217.2 91.2% 59.8%;          /* Azul para o anel de foco (outline) */
+
+    /* Outras variáveis */
+    --radius: 0.5rem;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* TEMA ESCURO (DARK MODE) - Mantido como estava, para consistência. */
+  /* ------------------------------------------------------------------ */
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -61,13 +87,16 @@
   }
 }
 
+/* ================================================================== */
+/* ▼▼▼ ESTILOS GLOBAIS BASE ▼▼▼                                     */
+/* ================================================================== */
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
-
-

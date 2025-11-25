@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Plus, Loader2, Download, CheckCircle, Ban, MoreHorizontal, Edit, Copy, Printer } from 'lucide-react'; // Importe o ícone Printer
+import { Plus, Loader2, Download, CheckCircle, Ban, MoreHorizontal, Edit, Copy, Printer } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import PreSaleForm from '../components/PreSaleForm';
-import Modal from '../components/Modal';
+import Modal from '../components/Modal'; // Usando o Modal universal
 import toast from 'react-hot-toast';
 
 const PreSales = () => {
@@ -100,19 +100,17 @@ const PreSales = () => {
     } catch (error) { /* O toast já trata o erro */ }
   };
 
-  // ▼▼▼ NOVA FUNÇÃO PARA IMPRIMIR O COMPROVANTE ▼▼▼
   const handlePrintReceipt = async (event, preSaleId) => {
     event.preventDefault();
     const toastId = toast.loading('Gerando comprovante em PDF...');
     try {
       const response = await api.get(`/pre-sales/receipt/${preSaleId}`, {
-        responseType: 'blob', // Trata a resposta como um arquivo binário
+        responseType: 'blob',
       });
       
       const file = new Blob([response.data], { type: 'application/pdf' });
       const fileURL = URL.createObjectURL(file);
       
-      // Abre o PDF em uma nova aba
       window.open(fileURL, '_blank');
       toast.success('Comprovante gerado!', { id: toastId });
       
@@ -121,7 +119,6 @@ const PreSales = () => {
       toast.error("Não foi possível gerar o comprovante.", { id: toastId });
     }
   };
-  // ▲▲▲ FIM DA NOVA FUNÇÃO ▲▲▲
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -175,7 +172,6 @@ const PreSales = () => {
                         <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Abrir menu</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           
-                          {/* Ação de imprimir disponível para a maioria dos status */}
                           {(ps.status === 'gerada' || ps.status === 'exportada' || ps.status === 'finalizada') && (
                             <DropdownMenuItem onSelect={(e) => handlePrintReceipt(e, ps.id)}>
                               <Printer className="mr-2 h-4 w-4" />
@@ -218,9 +214,22 @@ const PreSales = () => {
           {pagination && pagination.pages > 1 && (<Pagination pagination={pagination} onPageChange={fetchPreSales} itemName="pré-vendas" />)}
         </CardContent>
       </Card>
-      <Modal open={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingPreSale(null); }} title={editingPreSale?.action === 'edit' ? 'Editar Pré-venda' : editingPreSale?.action === 'duplicate' ? 'Refazer Pré-venda' : 'Criar Nova Pré-venda'} className="max-w-6xl">
+
+      {/* ▼▼▼ MODIFICAÇÃO APLICADA AQUI ▼▼▼ */}
+      <Modal 
+        open={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingPreSale(null); }} 
+        title={editingPreSale?.action === 'edit' ? 'Editar Pré-venda' : editingPreSale?.action === 'duplicate' ? 'Refazer Pré-venda' : 'Criar Nova Pré-venda'} 
+        // A prop 'maxWidth' substitui a 'className' para este propósito.
+        // 'max-w-4xl' é um bom ponto de partida. Você pode ajustar para 'max-w-5xl' ou 'max-w-6xl' se precisar de mais espaço.
+        maxWidth="max-w-6xl"
+        className="flex flex-col h-[700px] max-h-[90vh]"
+
+      >
         <PreSaleForm onSave={handleSave} preSaleData={editingPreSale} />
       </Modal>
+      {/* ▲▲▲ FIM DA MODIFICAÇÃO ▲▲▲ */}
+
     </div>
   );
 };

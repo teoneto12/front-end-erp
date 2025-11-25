@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft } from 'lucide-react';
+// NOVO: Importando o componente Switch e Label
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, Ban, CheckCircle } from 'lucide-react'; // NOVO: Ícones para o botão
 import api from '../lib/api.js';
 
 const ProductForm = () => {
@@ -14,6 +17,9 @@ const ProductForm = () => {
     name: '',
     description: '',
     sku: '',
+    // NOVO: Adicionando os novos campos ao estado inicial
+    supplier_code: '',
+    is_active: true,
     price: '',
     cost: '',
     stock_quantity: '',
@@ -49,6 +55,9 @@ const ProductForm = () => {
             name: product.name,
             description: product.description || '',
             sku: product.sku,
+            // NOVO: Preenchendo os novos campos com dados do produto
+            supplier_code: product.supplier_code || '',
+            is_active: product.is_active,
             price: product.price.toString(),
             cost: product.cost ? product.cost.toString() : '',
             stock_quantity: product.stock_quantity.toString(),
@@ -77,6 +86,7 @@ const ProductForm = () => {
     const promise = new Promise((resolve, reject) => {
       const runSubmit = async () => {
         try {
+          // O 'submitData' já incluirá 'supplier_code' e 'is_active'
           const submitData = {
             ...formData,
             price: parseFloat(formData.price) || 0,
@@ -154,6 +164,18 @@ const ProductForm = () => {
                 {formErrors.sku && <p className="text-sm text-red-600 mt-1">{formErrors.sku}</p>}
               </div>
             </div>
+
+            {/* NOVO: Campo para Código do Fornecedor */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Código Interno do Fornecedor</label>
+              <Input 
+                value={formData.supplier_code} 
+                onChange={(e) => setFormData({ ...formData, supplier_code: e.target.value })} 
+                placeholder="Ex: 98765-FORNEC" 
+                className={formErrors.supplier_code ? 'border-red-500' : ''} 
+              />
+              {formErrors.supplier_code && <p className="text-sm text-red-600 mt-1">{formErrors.supplier_code}</p>}
+            </div>
             
             <div>
               <label className="block text-sm font-medium mb-2">Descrição</label>
@@ -201,8 +223,20 @@ const ProductForm = () => {
                 {formErrors.group_id && <p className="text-sm text-red-600 mt-1">{formErrors.group_id}</p>}
               </div>
             </div>
+
+            {/* NOVO: Switch para Ativar/Inativar o produto */}
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+              />
+              <Label htmlFor="is_active" className={formData.is_active ? 'text-green-600' : 'text-red-600'}>
+                {formData.is_active ? 'Produto Ativo' : 'Produto Inativo'}
+              </Label>
+            </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-4">
               <Button type="submit" disabled={submitting}>{submitting ? 'Salvando...' : (isEditing ? 'Atualizar' : 'Salvar')}</Button>
               <Button type="button" variant="outline" onClick={() => navigate('/products')}>
                 Cancelar
