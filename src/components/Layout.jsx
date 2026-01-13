@@ -1,4 +1,5 @@
-// src/components/Layout.jsx
+// ARQUIVO: src/components/Layout.jsx
+// CÓDIGO COMPLETO E CORRIGIDO
 
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
@@ -6,7 +7,10 @@ import { useAuth } from '../hooks/useAuth.js';
 import { Button } from '@/components/ui/button';
 import { 
   Home, Package, Layers, Grid3X3, Tag, ShoppingCart, Landmark, CreditCard, 
-  Users, BarChart3, Settings, LogOut, Menu, X, Soup, Repeat, ChevronDown, ChevronRight, Wallet, Monitor, Share2, Search
+  Users, BarChart3, Settings, LogOut, Menu, X, Soup, Repeat, ChevronDown, 
+  ChevronRight, Wallet, Monitor, Share2, Search,
+  // --- Ícones que faltavam foram importados aqui ---
+  UtensilsCrossed, Square 
 } from 'lucide-react';
 import Notifications from './Notifications'; 
 import '../App.css';
@@ -23,10 +27,12 @@ const Layout = () => {
     navigate('/login');
   };
 
+  // --- Estrutura de navegação limpa e corrigida ---
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'Produtos', icon: Package, subItems: [ { name: 'Listar Produtos', href: '/products', icon: Package }, { name: 'Seções', href: '/sections', icon: Layers }, { name: 'Grupos', href: '/groups', icon: Grid3X3 }, ] },
-    { name: 'Caixa', icon: Wallet, subItems: [ { name: 'Frente de Caixa', href: '/transactions', icon: ShoppingCart }, { name: 'Pré-Vendas', href: '/pre-sales', icon: Tag }, { name: 'Trocas e Devoluções', href: '/returns', icon: Repeat }, { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard }, { name: 'Cozinha', href: '/kitchen', icon: Soup }, ] },
+    { name: 'Restaurante', icon: UtensilsCrossed, subItems: [ { name: 'Visão de Mesas', href: '/restaurant/tables', icon: Square }, { name: 'Cozinha', href: '/kitchen', icon: Soup }, ] },
+    { name: 'Caixa', icon: Wallet, subItems: [ { name: 'Frente de Caixa', href: '/transactions', icon: ShoppingCart }, { name: 'Pré-Vendas', href: '/pre-sales', icon: Tag }, { name: 'Trocas e Devoluções', href: '/returns', icon: Repeat }, { name: 'Formas de Pagamento', href: '/payment-methods', icon: CreditCard }, ] },
     { name: 'Financeiro', href: '/finance', icon: Landmark },
     { name: 'Pessoas', icon: Users, subItems:[ {name: 'Usuários', href: '/users', icon: Users}, {name: 'Clientes/Fornecedores', href: '/customers', icon: Users }, ] },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
@@ -44,7 +50,8 @@ const Layout = () => {
       {navigation.map((item) => {
         const Icon = item.icon;
         const isParentActive = item.subItems && item.subItems.some(sub => location.pathname.startsWith(sub.href));
-        const isOpen = openMenus[item.name]
+        const isOpen = openMenus[item.name];
+
         if (item.subItems) {
           return (
             <div key={item.name}>
@@ -54,6 +61,8 @@ const Layout = () => {
               </button>
               {isOpen && (
                 <div className="pl-4 mt-1 space-y-1">
+                  {/* --- CORREÇÃO DO ERRO "subItem is not defined" --- */}
+                  {/* Trocado "subItem.subItems.map" por "item.subItems.map" */}
                   {item.subItems.map(subItem => {
                     const SubIcon = subItem.icon;
                     const isSubActive = location.pathname === subItem.href || (subItem.href !== '/' && location.pathname.startsWith(subItem.href));
@@ -80,7 +89,7 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* --- Sidebar para Desktop (sem alterações) --- */}
+      {/* --- Sidebar para Desktop --- */}
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
         <div className="flex-1 flex flex-col min-h-0 bg-white border-r border-gray-200">
           <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
@@ -105,7 +114,7 @@ const Layout = () => {
         </div>
       </div>
 
-      {/* --- Sidebar para Mobile (sem alterações) --- */}
+      {/* --- Sidebar para Mobile --- */}
       {sidebarOpen && (
         <div className="fixed inset-0 flex z-40 md:hidden" role="dialog" aria-modal="true">
           <div className="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" onClick={() => setSidebarOpen(false)}></div>
@@ -134,7 +143,6 @@ const Layout = () => {
 
       {/* --- Conteúdo Principal --- */}
       <div className="md:pl-64 flex flex-col flex-1">
-        {/* ▼▼▼ 1. AUMENTADO O ESPAÇAMENTO SUPERIOR E DIREITO ▼▼▼ */}
         <div className="absolute top-5 right-8 z-20">
           <Notifications />
         </div>

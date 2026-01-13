@@ -34,7 +34,8 @@ import ProductListReport from './pages/reports/ProductListReport.jsx';
 import CustomerListReport from './pages/reports/CustomerListReport.jsx';
 import VarejoFacil from './components/VarejoFacil.jsx';
 import PedidoVendaVarejo from './pages/PedidoVendaVarejo.jsx';
-
+import KitchenScreen from './pages/cozinha.jsx';
+import RestaurantTablesScreen from './pages/RestaurantTablesScreen.jsx';
 
 // --- Estilos Globais ---
 import './App.css';
@@ -103,6 +104,9 @@ function AppRoutes() {
         <Route path="reports/customer-list" element={<CustomerListReport />} />
         <Route path="integrations/varejo-facil" element={<VarejoFacil />} />
         <Route path="/varejo-facil/pedido-venda" element={<PedidoVendaVarejo />} />
+        <Route path="kitchen" element={<KitchenScreen />} />
+        <Route path="/restaurant/tables" element={<RestaurantTablesScreen />} />
+
         
         
 
