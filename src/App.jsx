@@ -35,7 +35,7 @@ import CustomerListReport from './pages/reports/CustomerListReport.jsx';
 import VarejoFacil from './components/VarejoFacil.jsx';
 import PedidoVendaVarejo from './pages/PedidoVendaVarejo.jsx';
 import KitchenScreen from './pages/cozinha.jsx';
-import RestaurantTablesScreen from './pages/RestaurantTablesScreen.jsx';
+import RestaurantTablesScreen from './pages/restaurante/RestaurantTablesScreen.jsx';
 
 // --- Estilos Globais ---
 import './App.css';
