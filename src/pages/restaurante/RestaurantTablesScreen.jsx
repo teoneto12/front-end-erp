@@ -1,5 +1,3 @@
-// src/pages/restaurant/RestaurantTablesScreen.jsx
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
@@ -24,6 +22,8 @@ const RestaurantTablesScreen = () => {
   const [detailsLoading, setDetailsLoading] = useState(false);
 
   const [initialEntryData, setInitialEntryData] = useState(null);
+
+  const [transferAllModal, setTransferAllModal] = useState(null);
 
   const navigate = useNavigate();
 
@@ -78,7 +78,7 @@ const RestaurantTablesScreen = () => {
 
   const handleMainButtonClick = () => {
     if (selectedTableId && selectedTableDetails) {
-      if (selectedTableDetails.status === 'EM_PAGAMENTO') return; // Segurança extra
+      if (selectedTableDetails.status === 'EM_PAGAMENTO') return;
       setInitialEntryData({
         id: selectedTableDetails.id,
         name: selectedTableDetails.name,
@@ -137,6 +137,34 @@ const RestaurantTablesScreen = () => {
     }
   };
 
+  // --------------------------
+  // 🔥 NOVA FUNÇÃO TRANSFERIR TUDO
+  // --------------------------
+
+  const handleTransferAllItems = async (sourceTableId, destinationTableId) => {
+    try {
+      await toast.promise(
+        api.post('/restaurant/tables/transfer-all', {
+          sourceTableId,
+          destinationTableId
+        }),
+        {
+          loading: 'Transferindo todos os itens...',
+          success: 'Transferência concluída!',
+          error: (err) => err.response?.data?.error || 'Erro ao transferir itens'
+        }
+      );
+
+      fetchDetails(sourceTableId);
+      fetchDetails(destinationTableId);
+      fetchTables();
+      
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Erro ao transferir todos os itens');
+    }
+  };
+
   const filteredTables = tables.filter(table => 
     table.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (table.customer_name && table.customer_name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -180,7 +208,8 @@ const RestaurantTablesScreen = () => {
                 />
               </div>
             </header>
-            <main className="flex-grow overflow-y-auto -mr-3 pr-3">
+
+            <main className="flex-grow overflow-y-auto -mr-3 pr-3 mt-4">
               <CommandGrid
                 tables={filteredTables}
                 loading={loading}
@@ -188,23 +217,30 @@ const RestaurantTablesScreen = () => {
                 onTableClick={handleTableClick}
               />
             </main>
+
           </div>
+
           <div className="w-full md:w-1/3 h-full">
             <CommandDetailsPanel 
                 details={selectedTableDetails} 
                 isLoading={detailsLoading} 
                 onNavigate={handleMainButtonClick}
                 onRefresh={fetchDetails}
+                onTransferAll={handleTransferAllItems}   // <-- 🔥 ADICIONADO AQUI
+                allTables={tables} 
             />
           </div>
+
         </div>
       ) : (
+
         <ItemEntryScreen 
           onBack={() => setView('list')} 
           onSave={handleSaveNewCommand}
           onUpdate={handleUpdateCommand}
           initialData={initialEntryData}
         />
+
       )}
     </div>
   );
