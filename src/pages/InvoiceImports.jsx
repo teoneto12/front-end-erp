@@ -287,6 +287,7 @@ const InvoiceImport = () => {
         },
         error: (err) => `Erro: ${err.response?.data?.error || err.message}`,
       });
+    // eslint-disable-next-line no-unused-vars
     } catch (error) {
       // O toast.promise já trata o erro na UI
     } finally {
