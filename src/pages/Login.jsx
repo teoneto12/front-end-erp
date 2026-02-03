@@ -172,9 +172,20 @@ const Login = () => {
               </div>
             </div>
             
-            <Button type="submit" className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg" disabled={loading}>
-              {loading ? ( <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Entrando...</> ) : ( <><LogIn className="mr-2 h-5 w-5" />Entrar</> )}
+            <Button type="submit" className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg relative" disabled={loading}>
+  
+                  {/* Texto de entrar */}
+                  <span className={`${loading ? 'invisible' : 'visible flex items-center justify-center gap-2'}`}>
+                    <LogIn className="h-5 w-5" /> Entrar
+                  </span>
+
+                  {/* Loader */}
+                  <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 ${loading ? 'visible' : 'invisible'}`}>
+                    <Loader2 className="h-5 w-5 animate-spin" /> Entrando...
+                  </span>
+
             </Button>
+
           </form>
         </div>
 

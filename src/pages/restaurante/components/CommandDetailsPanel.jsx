@@ -1,292 +1,347 @@
-// src/pages/restaurant/components/CommandDetailsPanel.jsx
-
-import { useState } from 'react';
-import {
-  Loader2, ShoppingCart, MessageSquare, Percent, User,
-  Trash2, Printer, ArrowRightLeft, Layers, ChevronDown, ChevronUp
-} from 'lucide-react';
-
+import React, { useState, useEffect } from 'react';
+import { Clock, User, Receipt, ArrowRightLeft, Trash2, ChevronDown, Unlock, Lock, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import api from '@/lib/api';
-import toast from 'react-hot-toast';
 
-import CancelItemModal from './CancelItemModal';
-import TransferItemModal from './TransferItemModal';
-import TransferAllItemsModal from './TransferAllItemsModal';
+import CancelItemModal from "./CancelItemModal";
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-    .format(value || 0);
+const CommandDetailsPanel = ({ details, isLoading, onRefresh, tableId, onTransferAll }) => {
 
-const CommandDetailsPanel = ({ details, isLoading, onRefresh, allTables }) => {
-  const [itemToCancel, setItemToCancel] = useState(null);
-  const [itemToTransfer, setItemToTransfer] = useState(null);
-  const [transferAllOpen, setTransferAllOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [locking, setLocking] = useState(false);
 
+  const [serviceRate, setServiceRate] = useState(0);
+
+  // Modal de cancelamento de item
+  const [cancelItemModalOpen, setCancelItemModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  // NOVO — Modal para imprimir conferência
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+
+  // Buscar taxa de serviço
+  useEffect(() => {
+    const fetchServiceFee = async () => {
+      try {
+        const res = await api.get('/settings/SERVICE_FEE_PERCENT');
+        const value = parseFloat(res.data?.value);
+        if (!isNaN(value)) setServiceRate(value / 100);
+      } catch {
+        console.warn("Não foi possível carregar a taxa de serviço.");
+      }
+    };
+    fetchServiceFee();
+  }, []);
+
+  // Cancelar item
+  const handleCancelItem = async (itemId, cancelQuantity) => {
+    try {
+      await api.post(
+        `/restaurant/tables/${tableId}/items/${itemId}/cancel`,
+        { quantity: cancelQuantity }
+      );
+
+      await onRefresh(tableId, true);
+
+      setCancelItemModalOpen(false);
+      setSelectedItem(null);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao cancelar item.');
+    }
+  };
+
+  // NOVO — Função para imprimir conferência
+const handlePrint = () => {
+  setPrintModalOpen(false);
+
+  // 🔥 abrir página de impressão
+  const printWindow = window.open(`/print/conferencia/${tableId}`, "_blank");
+
+  // garantir que a impressão abra automaticamente
+  if (printWindow) {
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  }
+};
+
+
+  // BLOQUEAR COMANDA — AGORA ABRE MODAL
+  const handleLockCommand = async () => {
+    try {
+      setLocking(true);
+      await api.put(`/restaurant/tables/${tableId}/lock`);
+      await onRefresh(tableId, true);
+
+      // ABRE A PERGUNTA PARA IMPRIMIR
+      setPrintModalOpen(true);
+
+    } catch {
+      alert("Não foi possível bloquear a comanda para pagamento.");
+    } finally {
+      setLocking(false);
+    }
+  };
+
+  // DESBLOQUEAR
+  const handleUnlockCommand = async () => {
+    try {
+      setUnlocking(true);
+      await api.patch(`/restaurant/tables/${tableId}/unlock`);
+      onRefresh(tableId, true);
+    } catch {
+      alert("Não foi possível desbloquear a comanda.");
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
+  // CANCELAR COMANDA
+  const handleCancelCommand = async () => {
+    if (!window.confirm("Deseja realmente cancelar esta comanda?")) return;
+
+    try {
+      setCanceling(true);
+
+      if (details.status === "EM_PAGAMENTO") {
+        await api.patch(`/restaurant/tables/${tableId}/unlock-payment`);
+      }
+
+      await api.patch(`/restaurant/tables/${tableId}/cancel`);
+      onRefresh(tableId, true);
+
+    } catch (err) {
+      alert(err.response?.data?.message || "Erro ao cancelar comanda.");
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  // Loading
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full bg-white rounded-xl shadow-sm border">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <div className="bg-white rounded-xl p-6 shadow-sm h-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   if (!details) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-sm border p-4 text-center">
-        <ShoppingCart className="h-12 w-12 text-slate-300" />
-        <h3 className="mt-4 text-sm font-medium text-slate-800">
-          Nenhuma Comanda Selecionada
-        </h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Clique em uma comanda à esquerda para ver os detalhes.
-        </p>
+      <div className="bg-white rounded-xl p-6 shadow-sm h-full flex flex-col items-center justify-center text-slate-400">
+        <Receipt className="w-12 h-12 mb-4 opacity-20" />
+        <p>Selecione uma comanda para ver os detalhes</p>
       </div>
     );
   }
 
-  const isLocked = details.status === 'EM_PAGAMENTO';
+  // Cálculos
+  const subtotal = details.items?.reduce((sum, item) => {
+    const validQty = item.quantity - (item.cancelled_quantity || 0);
+    return sum + validQty * item.unit_price;
+  }, 0) || 0;
 
-  // CANCELAR ITEM
-  const handleConfirmCancel = async (itemId, quantityToCancel) => {
-    await toast.promise(
-      api.post(`/restaurant/tables/${details.id}/items/${itemId}/cancel`, { quantityToCancel }),
-      {
-        loading: 'Cancelando item...',
-        success: () => {
-          onRefresh?.(details.id);
-          setItemToCancel(null);
-          return 'Item cancelado!';
-        },
-        error: (err) => err.response?.data?.error || err.message,
-      }
-    );
-  };
-
-  // TRANSFERIR ITEM ÚNICO
-  const handleConfirmTransfer = async (sourceItemId, targetTableId, quantityToTransfer) => {
-    await toast.promise(
-      api.post(`/restaurant/tables/transfer-item`, {
-        sourceItemId,
-        targetTableId,
-        quantityToTransfer
-      }),
-      {
-        loading: 'Transferindo item...',
-        success: () => {
-          onRefresh?.(details.id);
-          onRefresh?.(targetTableId);
-          setItemToTransfer(null);
-          return 'Item transferido!';
-        },
-        error: (err) => err.response?.data?.error || err.message,
-      }
-    );
-  };
-
-  // TRANSFERIR TODOS OS ITENS
-  const handleTransferAll = async (targetTableId) => {
-    setTransferAllOpen(false);
-
-    await toast.promise(
-      api.post('/restaurant/tables/transfer-all-items', {
-        sourceTableId: details.id,
-        targetTableId
-      }),
-      {
-        loading: 'Transferindo itens...',
-        success: () => {
-          onRefresh?.(details.id);
-          onRefresh?.(targetTableId);
-          return 'Todos os itens foram transferidos!';
-        },
-        error: (err) => err.response?.data?.error || err.message,
-      }
-    );
-  };
-
-  const activeItems = (details.items || []).filter(i => i.status !== 'CANCELADO');
-
-  const subtotal = activeItems.reduce((acc, item) =>
-    acc + Number(item.quantity) * Number(item.unit_price), 0);
-
-  const serviceFee = subtotal * 0.10;
-  const total = subtotal + serviceFee;
+  const serviceCharge = subtotal * serviceRate;
+  const total = subtotal + serviceCharge;
 
   return (
-    <>
-      <div className="bg-white h-full rounded-xl shadow-sm border flex flex-col">
+    <div className="bg-white rounded-xl shadow-sm h-full flex flex-col overflow-hidden">
 
-        {/* HEADER */}
-        <header className="p-4 border-b">
-          <h2 className="text-xl font-bold text-slate-800 truncate">
-            Detalhes: {details.number}
-          </h2>
+      {/* HEADER */}
+      <header className="p-6 border-b">
+        <h2 className="text-2xl font-bold text-slate-800">Detalhes: {details.name}</h2>
+        <p className="text-sm text-slate-500">Aberta por: {details.opened_by || 'Admin'}</p>
+        <p className="text-xs mt-2 px-2 py-1 inline-block rounded bg-slate-100 text-slate-700">
+          Status: <strong>{details.status === "EM_PAGAMENTO" ? "BLOQUEADA" : details.status}</strong>
+        </p>
+      </header>
 
-          {details.customer_name ? (
-            <div className="flex items-center text-sm text-slate-500 mt-1">
-              <User className="w-4 h-4 mr-2" />
-              {details.customer_name}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500 mt-1">
-              Aberta por: {details.user_who_opened || 'Admin'}
-            </p>
-          )}
-        </header>
+      {/* LISTA DE ITENS */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <h3 className="font-bold text-slate-700 mb-4 uppercase text-xs tracking-wider">
+          Itens Consumidos
+        </h3>
 
-        {/* LISTA DE ITENS */}
-        <main className="flex-grow p-4 overflow-y-auto">
-          <h3 className="font-semibold mb-3 text-slate-700">Itens Consumidos</h3>
+        {details.items?.length > 0 ? (
+          <div className="space-y-4">
+            {details.items.map((item) => {
+              const validQty = item.quantity - (item.cancelled_quantity || 0);
+              const itemTotal = validQty * item.unit_price;
 
-          {details.items?.length ? (
-            <ul className="space-y-3">
-              {details.items.map(item => {
-                const cancelled = item.status === 'CANCELADO';
+              const fullyCanceled = validQty <= 0;
 
-                return (
-                  <li key={item.id} className={`${cancelled ? 'opacity-50' : ''}`}>
-                    <div className="flex justify-between items-center">
-                      <div className="flex-grow text-sm">
-                        <span className={cancelled ? 'line-through' : ''}>
-                          {item.quantity}x {item.product_name}
-                        </span>
+              return (
+                <div key={item.id}
+                  className={`flex justify-between items-center group p-2 rounded-lg ${fullyCanceled ? "bg-red-50 border border-red-200" : ""}`}
+                >
+                  <div className="flex-1">
+
+                    {fullyCanceled ? (
+                      <p className="text-red-600 font-medium">
+                        {item.product_name}
+                        <span className="ml-2 text-xs">(ITEM CANCELADO — {item.cancelled_quantity})</span>
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-slate-800 font-medium">
+                          {validQty.toFixed(3)}x {item.product_name}
+                          {item.cancelled_quantity > 0 && (
+                            <span className="ml-2 text-xs text-red-500">(Cancelados: {item.cancelled_quantity})</span>
+                          )}
+                        </p>
 
                         {item.notes && (
-                          <p className="text-xs text-slate-500 pl-4 flex items-center">
-                            <MessageSquare className="w-3 h-3 mr-1" />
-                            {item.notes}
-                          </p>
+                          <p className="text-xs text-slate-500 italic">{item.notes}</p>
                         )}
-                      </div>
+                      </>
+                    )}
+                  </div>
 
-                      {!cancelled && (
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost"
-                            disabled={isLocked}
-                            onClick={() => setItemToTransfer(item)}
-                          >
-                            <ArrowRightLeft className="w-4 h-4 text-blue-500" />
-                          </Button>
+                  <div className="flex items-center gap-4">
 
-                          <Button size="icon" variant="ghost"
-                            disabled={isLocked}
-                            onClick={() => setItemToCancel(item)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-400 mt-4">Nenhum item lançado.</p>
-          )}
-        </main>
+                    {!fullyCanceled && (
+                      <span className="text-slate-600 font-semibold">
+                        R$ {itemTotal.toFixed(2)}
+                      </span>
+                    )}
 
-        {/* FOOTER */}
-        <footer className="p-4 border-t bg-slate-50 rounded-b-xl">
-          <div className="space-y-2 text-sm mb-4">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span className="font-medium">{formatCurrency(subtotal)}</span>
-            </div>
+                    {!fullyCanceled && (
+                      <>
+                        <button
+                          onClick={() => onTransferAll(item)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        >
+                          <ArrowRightLeft className="w-4 h-4" />
+                        </button>
 
-            <div className="flex justify-between">
-              <span className="flex items-center">
-                <Percent className="w-3 h-3 mr-1" /> Taxa de Serviço (10%)
-              </span>
-              <span className="font-medium">{formatCurrency(serviceFee)}</span>
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="flex justify-between text-lg font-bold">
-              <span>Total</span>
-              <span>{formatCurrency(total)}</span>
-            </div>
+                        <button
+                          onClick={() => {
+                            setSelectedItem(item);
+                            setCancelItemModalOpen(true);
+                          }}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setActionsOpen(!actionsOpen)}
-          >
-            Opções da Comanda
-            {actionsOpen ? (
-              <ChevronUp className="w-4 h-4 ml-2" />
-            ) : (
-              <ChevronDown className="w-4 h-4 ml-2" />
-            )}
-          </Button>
-
-          {actionsOpen && (
-            <div className="mt-2 flex flex-col gap-2 animate-fade-in">
-
-              {!isLocked && activeItems.length > 0 && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setTransferAllOpen(true)}
-                >
-                  <Layers className="w-4 h-4 mr-2" />
-                  Transferir Todos os Itens
-                </Button>
-              )}
-
-              {!isLocked && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() =>
-                    api.put(`/restaurant/tables/${details.id}/lock`)
-                      .then(() => {
-                        toast.success("Comanda bloqueada!");
-                        onRefresh(details.id);
-                      })
-                      .catch(err =>
-                        toast.error(err.response?.data?.error || err.message)
-                      )
-                  }
-                >
-                  <Printer className="w-4 h-4 mr-2" />
-                  Gerar Conferência
-                </Button>
-              )}
-
-            </div>
-          )}
-        </footer>
+        ) : (
+          <div className="text-center py-10 text-slate-400">Nenhum item lançado nesta comanda.</div>
+        )}
       </div>
 
-      {/* MODAIS */}
+      {/* TOTAL */}
+      <footer className="p-6 bg-slate-50 border-t">
+
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between text-sm text-slate-600">
+            <span>Subtotal</span>
+            <span>R$ {subtotal.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between text-sm text-slate-600">
+            <span>Taxa de Serviço ({(serviceRate * 100).toFixed(2)}%)</span>
+            <span>R$ {serviceCharge.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t">
+            <span>Total</span>
+            <span>R$ {total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              Opções da Comanda
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-[240px]">
+
+            <DropdownMenuItem onClick={() => onTransferAll(details)}>
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Transferência Parcial
+            </DropdownMenuItem>
+
+            {details.status !== "EM_PAGAMENTO" && (
+              <DropdownMenuItem onClick={handleLockCommand} disabled={locking}>
+                <Lock className="mr-2 h-4 w-4" />
+                {locking ? "Bloqueando..." : "Bloquear (Pagamento)"}
+              </DropdownMenuItem>
+            )}
+
+            {details.status === "EM_PAGAMENTO" && (
+              <DropdownMenuItem onClick={handleUnlockCommand} disabled={unlocking}>
+                <Unlock className="mr-2 h-4 w-4" />
+                {unlocking ? "Desbloqueando..." : "Desbloquear Comanda"}
+              </DropdownMenuItem>
+            )}
+
+            <DropdownMenuItem
+              className="text-red-600"
+              onClick={handleCancelCommand}
+              disabled={canceling}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {canceling ? "Cancelando..." : "Cancelar Comanda"}
+            </DropdownMenuItem>
+
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </footer>
+
+      {/* MODAL DE CANCELAR ITEM */}
       <CancelItemModal
-        item={itemToCancel}
-        isOpen={!!itemToCancel}
-        onClose={() => setItemToCancel(null)}
-        onConfirm={handleConfirmCancel}
+        item={selectedItem}
+        isOpen={cancelItemModalOpen}
+        onClose={() => setCancelItemModalOpen(false)}
+        onConfirm={handleCancelItem}
       />
 
-      <TransferItemModal
-        item={itemToTransfer}
-        allTables={allTables}
-        isOpen={!!itemToTransfer}
-        onClose={() => setItemToTransfer(null)}
-        onConfirm={handleConfirmTransfer}
-      />
+      {/* NOVO — MODAL DE IMPRESSÃO */}
+      {printModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-[360px]">
 
-      {/* MODAL DE TRANSFERIR TODOS */}
-      <TransferAllItemsModal
-        open={transferAllOpen}
-        onOpenChange={setTransferAllOpen}
-        sourceCommandId={details.id}
-      />
-    </>
+            <h3 className="text-lg font-bold mb-4 text-slate-800">
+              Deseja imprimir a conferência da conta?
+            </h3>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setPrintModalOpen(false)}
+              >
+                Não
+              </Button>
+
+              <Button
+                onClick={handlePrint}
+                className="flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 };
 

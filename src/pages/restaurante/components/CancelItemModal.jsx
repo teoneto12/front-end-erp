@@ -1,12 +1,17 @@
-// src/pages/restaurant/components/CancelItemModal.jsx
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const CancelItemModal = ({ item, isOpen, onClose, onConfirm }) => {
   const [quantity, setQuantity] = useState(1);
+
+  // 🔥 Resetar a quantidade sempre que o item mudar ou o modal abrir
+  useEffect(() => {
+    if (isOpen) {
+      setQuantity(1);
+    }
+  }, [item, isOpen]);
 
   if (!item) return null;
 
@@ -22,12 +27,11 @@ const CancelItemModal = ({ item, isOpen, onClose, onConfirm }) => {
         <DialogHeader>
           <DialogTitle>Cancelar Item</DialogTitle>
           <DialogDescription>
-            Você está cancelando o item: <strong>{item.product_name}</strong>.
-              
-
+            Você está cancelando o item: <strong>{item.product_name}</strong>.<br />
             Quantidade atual: {item.quantity}.
           </DialogDescription>
         </DialogHeader>
+
         <div className="py-4">
           <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">
             Quantidade a cancelar
@@ -42,6 +46,7 @@ const CancelItemModal = ({ item, isOpen, onClose, onConfirm }) => {
             autoFocus
           />
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Fechar</Button>
           <Button onClick={handleConfirm}>Confirmar Cancelamento</Button>

@@ -66,21 +66,29 @@ const ItemEntryScreen = ({ onBack, onSave, onUpdate, initialData }) => {
     checkForExistingTable();
   }, 500, [commandName, initialData]);
 
-  useEffect(() => {
-    const fetchSections = async () => {
-      setLoadingSections(true);
-      try {
-        const response = await api.get('/sections');
-        setSections(response.data.sections?.filter(s => s.id != null) || []);
-      } catch (error) {
-        console.error("Falha ao buscar seções:", error);
-        toast.error(`Falha ao buscar seções: ${error.response?.data?.error || error.message}`);
-      } finally {
-        setLoadingSections(false);
-      }
-    };
-    fetchSections();
-  }, []);
+ useEffect(() => {
+  const fetchSections = async () => {
+    setLoadingSections(true);
+    try {
+      const response = await api.get('/sections');
+
+      // FILTRA SOMENTE SEÇÕES VISÍVEIS NO RESTAURANTE
+      setSections(
+        (response.data.sections || [])
+          .filter(s => s.id != null && s.show_in_restaurant === true)
+      );
+
+    } catch (error) {
+      console.error("Falha ao buscar seções:", error);
+      toast.error(`Falha ao buscar seções: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setLoadingSections(false);
+    }
+  };
+
+  fetchSections();
+}, []);
+
 
   useEffect(() => {
     const fetchProductsBySection = async () => {

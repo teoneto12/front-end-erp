@@ -156,6 +156,7 @@ const CloseCashierModal = ({ onConfirm, summary, onClose, isClosing, paymentMeth
 // ==================================================================
 const Transactions = () => {
   // --- ESTADOS ---
+  const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
   const [view, setView] = useState('dashboard');
   const [modal, setModal] = useState(null);
   const [activeSession, setActiveSession] = useState(null);
@@ -190,6 +191,17 @@ const Transactions = () => {
   const [showReceiptOptions, setShowReceiptOptions] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
   const [lastChange, setLastChange] = useState(0);
+
+
+  const handleClosePDV = () => {
+  // 1. Força o fechamento do menu do Select imediatamente
+  setIsCustomerSelectOpen(false);
+  
+  // 2. Aguarda um tempo um pouco maior para garantir que o DOM limpou o Portal
+  setTimeout(() => {
+    setView('dashboard');
+  }, 200); // Aumentamos para 200ms para maior segurança
+};
 
   // --- FUNÇÕES DE LÓGICA ---
   const checkSessionStatus = useCallback(async () => {
@@ -295,8 +307,9 @@ const Transactions = () => {
   useHotkeys('esc', () => {
     if (modal) setModal(null);
     else if (showReceiptOptions) setShowReceiptOptions(false);
-    else if (view === 'pdv') setView('dashboard');
+    else if (view === 'pdv') handleClosePDV(); // Alterado aqui
   }, { enableOnTags: ['INPUT', 'SELECT', 'TEXTAREA'] });
+
 
   useEffect(() => {
     checkSessionStatus();
@@ -367,7 +380,9 @@ const Transactions = () => {
   };
   
   const handleFinalizeSale = async () => {
+    setIsCustomerSelectOpen(false); 
     const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+
     
     // CORREÇÃO 1: A validação agora usa 'totalAmount', que já considera o desconto.
     // A pequena tolerância de 0.01 é mantida para evitar erros de arredondamento.
@@ -514,7 +529,10 @@ const Transactions = () => {
             <Button variant="outline" onClick={() => setModal('SUPRIMENTO')}><ArrowUpCircle className="w-4 h-4 mr-2" />Suprimento</Button>
             <Button variant="outline" onClick={() => setModal('SANGRIA')} className="text-orange-600 border-orange-300 hover:bg-orange-50 hover:text-orange-700"><ArrowDownCircle className="w-4 h-4 mr-2" />Sangria</Button>
             <Button variant="destructive" onClick={() => setModal('close_cashier')}><DoorClosed className="w-4 h-4 mr-2" />Fechar Caixa (F9)</Button>
-            <Button variant="ghost" size="icon" onClick={() => setView('dashboard')}><X className="w-5 h-5" /> (ESC)</Button>
+            <Button variant="ghost" size="icon" onClick={handleClosePDV}>
+              <X className="w-5 h-5" /> (ESC)
+            </Button>
+
           </div>
         </header>
         
@@ -539,11 +557,22 @@ const Transactions = () => {
               
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Indicar Cliente (F4)</label>
-                <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                  <SelectTrigger id="customer-select-trigger"><SelectValue placeholder="Selecione um cliente..." /></SelectTrigger>
-                  <SelectContent>
+                <Select 
+                  value={selectedCustomerId || "none"} // Garante que nunca seja undefined
+                  onValueChange={setSelectedCustomerId}
+                  open={isCustomerSelectOpen}
+                  onOpenChange={setIsCustomerSelectOpen}
+                >
+                  <SelectTrigger id="customer-select-trigger">
+                    <SelectValue placeholder="Selecione um cliente..." />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
                     <SelectItem value="none">Nenhum (Consumidor Final)</SelectItem>
-                    {customers.map(customer => (<SelectItem key={customer.id} value={customer.id.toString()}>{customer.name}</SelectItem>))}
+                    {customers?.map(customer => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

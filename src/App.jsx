@@ -1,16 +1,16 @@
-// Em /src/App.jsx (VERSÃO FINAL COMPLETA E CORRIGIDA)
+// Em /src/App.jsx (VERSÃO FINAL CORRIGIDA E FUNCIONAL)
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './hooks/useAuth.js';
 
 // --- Componentes de Estrutura ---
-import Layout from './components/Layout';
+import Layout from './components/Layout'; // Layout deve usar <Outlet />
 import ProtectedRoute from './components/ProtectedRoute';
 
-// --- Páginas Públicas e Principais ---
+// --- Páginas (Importações completas) ---
 import Login from './pages/Login';
-import Settings from './pages/Settings.jsx'; // Página de configurações
+import Settings from './pages/Settings.jsx';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products.jsx';
 import ProductForm from './pages/ProductForm.jsx';
@@ -24,7 +24,7 @@ import Customers from './pages/Customers.jsx';
 import PaymentMethods from './pages/PaymentMethods.jsx';
 import PreSales from './pages/PreSales.jsx';
 import Workstations from './pages/Workstations.jsx';
-// --- Páginas de Relatórios ---
+import Returns from './pages/Returns.jsx';
 import ReportsPage from './pages/Reports.jsx';
 import SalesByPeriodPage from './pages/reports/SalesByPeriodPage.jsx';
 import SalesByPaymentMethodPage from './pages/reports/SalesByPaymentMethodPage.jsx';
@@ -36,94 +36,12 @@ import VarejoFacil from './components/VarejoFacil.jsx';
 import PedidoVendaVarejo from './pages/PedidoVendaVarejo.jsx';
 import KitchenScreen from './pages/cozinha.jsx';
 import RestaurantTablesScreen from './pages/restaurante/RestaurantTablesScreen.jsx';
+import PrintPage from "@/pages/restaurante/prints/PrintPage.jsx";
 
 // --- Estilos Globais ---
 import './App.css';
-import Returns from './pages/Returns.jsx';
 
-// Componente que define a estrutura de rotas da aplicação
-function AppRoutes() {
-  return (
-    <Routes>
-      {/* ====================================================== */}
-      {/* ▼▼▼ ROTAS PÚBLICAS (Acessíveis sem login) ▼▼▼          */}
-      {/* ====================================================== */}
-      <Route path="/login" element={<Login />} />
-      
-      {/* 
-        A rota de Settings agora também é pública. Isso permite que um novo
-        usuário configure o endereço do servidor sem precisar estar logado.
-        A tela de Login já direciona para cá se necessário.
-      */}
-      <Route path="/settings" element={<Settings />} />
-      {/* ====================================================== */}
-      {/* ▲▲▲ FIM DAS ROTAS PÚBLICAS ▲▲▲                        */}
-      {/* ====================================================== */}
-
-
-      {/* ====================================================== */}
-      {/* ▼▼▼ ROTAS PROTEGIDAS (Exigem login) ▼▼▼                */}
-      {/* ====================================================== */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        {/* Página Inicial (Dashboard) */}
-        <Route index element={<Dashboard />} />
-        
-        {/* Rotas de Gestão */}
-        <Route path="products" element={<Products />} />
-        <Route path="products/new" element={<ProductForm />} />
-        <Route path="products/edit/:id" element={<ProductForm />} />
-        <Route path="invoices/import" element={<InvoiceImport />} />
-        <Route path="sections" element={<Sections />} />
-        <Route path="groups" element={<Groups />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="users" element={<Users />} />
-        
-        {/* Rotas de Vendas e Financeiro */}
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="pre-sales" element={<PreSales />} />
-        <Route path="finance" element={<Finance />} />
-        <Route path="payment-methods" element={<PaymentMethods />} />
-        <Route path="workstations" element={<Workstations />}/>
-
-        
-        {/* Rotas de Relatórios */}
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="reports/sales-by-period" element={<SalesByPeriodPage />} />
-        <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
-        <Route path="reports/top-selling-products" element={<TopSellingProductsReport />} />
-        <Route path="reports/sales-by-user" element={<SalesByUserReport />} />
-        <Route path="/returns" element={<Returns />} /> 
-        <Route path="reports/product-list" element={<ProductListReport />} />
-        <Route path="reports/customer-list" element={<CustomerListReport />} />
-        <Route path="integrations/varejo-facil" element={<VarejoFacil />} />
-        <Route path="/varejo-facil/pedido-venda" element={<PedidoVendaVarejo />} />
-        <Route path="kitchen" element={<KitchenScreen />} />
-        <Route path="/restaurant/tables" element={<RestaurantTablesScreen />} />
-
-        
-        
-
-        {/* 
-          A rota de configurações dentro da área logada pode ser mantida
-          para que o usuário possa alterar as configurações depois.
-          (Removida para evitar duplicidade, a de Login já resolve)
-        */}
-        
-        {/* Rota "catch-all": Se nenhuma rota acima for encontrada, redireciona para a página inicial */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
-  );
-}
-
-// Componente principal que envolve a aplicação com provedores de contexto
+// Componente principal que envolve a aplicação
 function App() {
   return (
     <AuthProvider>
@@ -138,7 +56,64 @@ function App() {
             },
           }}
         />
-        <AppRoutes />
+        <Routes>
+          {/* ============================================================= */}
+          {/* ▼▼▼ ROTAS QUE NÃO USAM O LAYOUT PRINCIPAL ▼▼▼                 */}
+          {/* ============================================================= */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route 
+            path="/print/table/:tableId" 
+            element={
+              <ProtectedRoute>
+                <PrintPage />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* ============================================================= */}
+          {/* ▼▼▼ ROTAS QUE USAM O LAYOUT PRINCIPAL (<Outlet />) ▼▼▼        */}
+          {/* ============================================================= */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            {/* O <Layout> renderiza estas rotas filhas através do <Outlet /> */}
+            <Route index element={<Dashboard />} />
+            <Route path="products" element={<Products />} />
+            <Route path="products/new" element={<ProductForm />} />
+            <Route path="products/edit/:id" element={<ProductForm />} />
+            <Route path="invoices/import" element={<InvoiceImport />} />
+            <Route path="sections" element={<Sections />} />
+            <Route path="groups" element={<Groups />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="users" element={<Users />} />
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="pre-sales" element={<PreSales />} />
+            <Route path="finance" element={<Finance />} />
+            <Route path="payment-methods" element={<PaymentMethods />} />
+            <Route path="workstations" element={<Workstations />}/>
+            <Route path="returns" element={<Returns />} /> 
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/sales-by-period" element={<SalesByPeriodPage />} />
+            <Route path="reports/sales-by-payment-method" element={<SalesByPaymentMethodPage />} />
+            <Route path="reports/top-selling-products" element={<TopSellingProductsReport />} />
+            <Route path="reports/sales-by-user" element={<SalesByUserReport />} />
+            <Route path="reports/product-list" element={<ProductListReport />} />
+            <Route path="reports/customer-list" element={<CustomerListReport />} />
+            <Route path="integrations/varejo-facil" element={<VarejoFacil />} />
+            <Route path="varejo-facil/pedido-venda" element={<PedidoVendaVarejo />} />
+            <Route path="kitchen" element={<KitchenScreen />} />
+            <Route path="restaurant/tables" element={<RestaurantTablesScreen />} />
+            
+            {/* Rota "catch-all" para redirecionar para a página inicial */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
       </Router>
     </AuthProvider>
   );
