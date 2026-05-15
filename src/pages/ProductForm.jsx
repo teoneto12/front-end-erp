@@ -62,7 +62,7 @@ const ProductForm = () => {
             cost: product.cost ? product.cost.toString() : '',
             stock_quantity: product.stock_quantity.toString(),
             section_id: product.section_id ? String(product.section_id) : '',
-            group_id: product.group_id ? String(product.group_id) : '',
+            group_id: product.group_id ? String(group_id) : '',
           });
         } else if (location.state) {
           setFormData(location.state);
@@ -81,6 +81,16 @@ const ProductForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors({});
+    
+    // Validação de custo: até 4 casas decimais
+    if (formData.cost) {
+      const parts = formData.cost.split('.');
+      if (parts[1] && parts[1].length > 4) {
+        setFormErrors({ cost: 'O custo deve ter no máximo 4 casas decimais' });
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     const promise = new Promise((resolve, reject) => {
@@ -191,7 +201,22 @@ const ProductForm = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Custo</label>
-                <Input type="number" step="0.01" min="0" value={formData.cost} onChange={(e) => setFormData({ ...formData, cost: e.target.value })} placeholder="0.00" className={formErrors.cost ? 'border-red-500' : ''} />
+                <Input 
+                  type="number" 
+                  step="0.0001" 
+                  min="0" 
+                  value={formData.cost} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const parts = val.split('.');
+                    // Permite digitar se tiver até 4 casas decimais
+                    if (!parts[1] || parts[1].length <= 4) {
+                      setFormData({ ...formData, cost: val });
+                    }
+                  }} 
+                  placeholder="0.0000" 
+                  className={formErrors.cost ? 'border-red-500' : ''} 
+                />
                 {formErrors.cost && <p className="text-sm text-red-600 mt-1">{formErrors.cost}</p>}
               </div>
               <div>
